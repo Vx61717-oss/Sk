@@ -1,60 +1,1311 @@
--- ═══ SKY — الجزء الثاني (يُحمَّل تلقائياً من الجزء الأول، لا تشغّله لحاله) ═══
-local __S = _G.__SkyShared
-assert(type(__S)=="table", "شغّل الجزء الأول (Part1) مو الثاني")
-local FIREBASE_URL = __S.FIREBASE_URL
-local MODERATION_URL = __S.MODERATION_URL
-local CHAT_MUTE_SECONDS = __S.CHAT_MUTE_SECONDS
-local TYPING_URL = __S.TYPING_URL
-local PRESENCE_URL = __S.PRESENCE_URL
-local NOTES_URL = __S.NOTES_URL
-local AUTH_TOKEN = __S.AUTH_TOKEN
-local request = __S.request
-local setClipboardText = __S.setClipboardText
-local SkyServerPreload = __S.SkyServerPreload
-local SkyStartServerPreload = __S.SkyStartServerPreload
-local QueueSkyScriptAfterTeleport = __S.QueueSkyScriptAfterTeleport
-local _TweenS = __S._TweenS
-local ScreenGui = __S.ScreenGui
-local SoundService = __S.SoundService
-local MusicTracks = __S.MusicTracks
-local playClick = __S.playClick
-local _ownSounds = __S._ownSounds
-local NG = __S.NG
-local _TranslateText = __S._TranslateText
-local PlaySelectedExitAlert = __S.PlaySelectedExitAlert
-local State = __S.State
-local UI = __S.UI
-local TweenService = __S.TweenService
-local UpdatePlayerCard = __S.UpdatePlayerCard
-local AddMovingBorderGlow = __S.AddMovingBorderGlow
-local SetGlowColor = __S.SetGlowColor
-local _animIn = __S._animIn
-local _pressFeedback = __S._pressFeedback
-local TOGGLE_OFF_COLOR = __S.TOGGLE_OFF_COLOR
-local _activeGlow = __S._activeGlow
-local saveMyPos = __S.saveMyPos
-local UpdateVisualEffects = __S.UpdateVisualEffects
-local MakeDraggable = __S.MakeDraggable
-local RunService = __S.RunService
-local Players = __S.Players
-local Camera = __S.Camera
-local LocalPlayer = __S.LocalPlayer
-local CreateFlyPanel = __S.CreateFlyPanel
-local CreateTeleportPanel = __S.CreateTeleportPanel
-local ESP = __S.ESP
-local IsFriend = __S.IsFriend
-local HideAllESP = __S.HideAllESP
-local ChatInputBar = __S.ChatInputBar
-local SetToSuperMiniMode = __S.SetToSuperMiniMode
-local SetToFullMode = __S.SetToFullMode
-local GetTabColorForInstance = __S.GetTabColorForInstance
-local GetTabIndexForInstance = __S.GetTabIndexForInstance
-local AddTabGlow = __S.AddTabGlow
-local BlendColor3 = __S.BlendColor3
-local MoveUnderline = __S.MoveUnderline
-local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighlight
+        section.Parent = UI.Page11
+        Instance.new("UICorner", section).CornerRadius = UDim.new(0, 10)
+        local sStroke = Instance.new("UIStroke", section)
+        sStroke.Color = THEME
+        sStroke.Thickness = 1.3
+        sStroke.Transparency = 0.35
 
--- ❌⭕ لعبة XO: ضد الكمبيوتر (سهل/صعب) أو ضد لاعب مشغّل السكربت (نفس نظام دعوات الشطرنج)
+        local sTitle = Instance.new("TextLabel")
+        sTitle.BackgroundTransparency = 1
+        sTitle.Size = UDim2.new(1, -20, 0, 26)
+        sTitle.Position = UDim2.new(0, 10, 0, 8)
+        sTitle.Font = Enum.Font.Arcade
+        sTitle.TextSize = 18
+        sTitle.TextColor3 = Color3.fromRGB(220, 255, 240)
+        sTitle.TextXAlignment = Enum.TextXAlignment.Right
+        sTitle.Text = "الشطرنج"
+        sTitle.ZIndex = 8
+        sTitle.Parent = section
+
+        local sDesc = Instance.new("TextLabel")
+        sDesc.BackgroundTransparency = 1
+        sDesc.Size = UDim2.new(1, -20, 0, 20)
+        sDesc.Position = UDim2.new(0, 10, 0, 36)
+        sDesc.Font = Enum.Font.Arcade
+        sDesc.TextSize = 12
+        sDesc.TextColor3 = Color3.fromRGB(170, 220, 255)
+        sDesc.TextXAlignment = Enum.TextXAlignment.Right
+        sDesc.Text = "العب ضد البتات أو تحدَّ اللاعبين المتصلين"
+        sDesc.ZIndex = 8
+        sDesc.Parent = section
+
+        local startBtn = Instance.new("TextButton")
+        startBtn.Size = UDim2.new(0.6, 0, 0, 34)
+        startBtn.AnchorPoint = Vector2.new(0.5, 1)
+        startBtn.Position = UDim2.new(0.5, 0, 1, -12)
+        startBtn.BackgroundColor3 = Color3.fromRGB(45, 130, 85)
+        startBtn.BorderSizePixel = 0
+        startBtn.AutoButtonColor = false
+        startBtn.Font = Enum.Font.Arcade
+        startBtn.TextSize = 16
+        startBtn.TextColor3 = Color3.new(1, 1, 1)
+        startBtn.Text = "▶ ابدأ اللعبة"
+        startBtn.ZIndex = 9
+        startBtn.Parent = section
+        Instance.new("UICorner", startBtn).CornerRadius = UDim.new(0, 8)
+        local startStroke = Instance.new("UIStroke", startBtn)
+        startStroke.Color = THEME
+        startStroke.Thickness = 1.3
+
+        local activeGame
+        local launch
+        local queuedChessInvite = nil
+        local pendingChallengeTarget, pendingMatchId, pendingOpponentName = nil, nil, nil
+        local ChessHttp = game:GetService("HttpService")
+        local function chessGlobalCall(method, path, body)
+            if not request then return nil, false end
+            local ok, res = pcall(function()
+                return request({Url = "https://skyv-1ce1a-default-rtdb.firebaseio.com/chess/" .. path .. ".json?auth=" .. AUTH_TOKEN,
+                    Method = method, Headers = {["Content-Type"] = "application/json"},
+                    Body = body and ChessHttp:JSONEncode(body) or nil})
+            end)
+            if not ok or type(res) ~= "table" then return nil, false end
+            local code = res.StatusCode or res.status_code
+            if code and code >= 400 then return nil, false end
+            local raw = res.Body or res.body
+            if type(raw) ~= "string" or raw == "" or raw == "null" then return nil, true end
+            local good, data = pcall(function() return ChessHttp:JSONDecode(raw) end)
+            return good and data or nil, good
+        end
+
+        launch = function()
+            if activeGame then activeGame() end
+
+            local alive = true
+            local conns = {}
+
+            local NAMES = {K = "الملك", Q = "الوزير", R = "القلعة", B = "الفيل", N = "الحصان", P = "البيدق"}
+            local LIGHT = Color3.fromRGB(236, 238, 214)
+            local DARK = Color3.fromRGB(104, 148, 96)
+            local WHITE_P = Color3.fromRGB(255, 252, 240)
+            local BLACK_P = Color3.fromRGB(34, 30, 30)
+            local GOLD = Color3.fromRGB(255, 215, 100)
+            local RED = Color3.fromRGB(255, 120, 120)
+            local GREEN = Color3.fromRGB(150, 235, 170)
+            local GRAY = Color3.fromRGB(170, 190, 215)
+            local BAR = Color3.fromRGB(28, 33, 41)
+            local LEVELS = {
+                {name = "سهل", color = Color3.fromRGB(60, 150, 85)},
+                {name = "متوسط", color = Color3.fromRGB(190, 140, 40)},
+                {name = "صعب", color = Color3.fromRGB(180, 65, 65)},
+            }
+
+            local state = Engine.newState()
+            local selected, selMoves, lastMove = nil, {}, nil
+            local history = {}
+            local busy, gameOver = false, false
+            local level = 2
+            local gameId = 0
+            local pendingPromo = nil
+            local squares = {}
+
+            -- ---------- الشاشة الكاملة ----------
+            local overlay = Instance.new("Frame")
+            overlay.Name = "ChessGame"
+            overlay.Size = UDim2.new(1, 0, 1, 0)
+            overlay.BackgroundColor3 = Color3.fromRGB(16, 19, 24)
+            overlay.BorderSizePixel = 0
+            overlay.Active = true
+            overlay.ClipsDescendants = true
+            overlay.ZIndex = Z
+            overlay.Parent = ScreenGui
+            local bg = Instance.new("UIGradient", overlay)
+            bg.Rotation = 90
+            bg.Color = ColorSequence.new(Color3.fromRGB(28, 36, 44), Color3.fromRGB(10, 12, 16))
+
+            local card = Instance.new("Frame")
+            card.AnchorPoint = Vector2.new(0.5, 0.5)
+            card.Position = UDim2.new(0.5, 0, 0.5, 0)
+            card.Size = UDim2.new(0, 320, 0, 522)
+            card.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            card.BackgroundTransparency = 0
+            card.ZIndex = Z + 1
+            card.Parent = overlay
+
+            local newGame
+            local cleanup
+            local chosenLevel = 2
+
+            local function mkBtn(text, color, parent, onClick)
+                local b = Instance.new("TextButton")
+                b.BackgroundColor3 = color
+                b.BorderSizePixel = 0
+                b.AutoButtonColor = true
+                b.Font = Enum.Font.Arcade
+                b.TextScaled = true
+                b.TextSize = 14
+                b.TextColor3 = Color3.new(1, 1, 1)
+                b.Text = text
+                b.ZIndex = Z + 3
+                b.Parent = parent
+                Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+                Instance.new("UITextSizeConstraint", b).MaxTextSize = 15
+                local bp = Instance.new("UIPadding", b)
+                bp.PaddingLeft = UDim.new(0, 5)
+                bp.PaddingRight = UDim.new(0, 5)
+                bp.PaddingTop = UDim.new(0, 4)
+                bp.PaddingBottom = UDim.new(0, 4)
+                local st = Instance.new("UIStroke", b)
+                st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                st.Color = THEME
+                st.Thickness = 1.2
+                st.Transparency = 0.4
+                b.MouseButton1Click:Connect(onClick)
+                return b
+            end
+
+            -- ---------- قائمة البداية: البتات أو اللاعبين ----------
+            local HttpService = game:GetService("HttpService")
+            local PlayersService = game:GetService("Players")
+            local LocalPlayer = PlayersService.LocalPlayer
+            local CHESS_ROOT = "https://skyv-1ce1a-default-rtdb.firebaseio.com/chess"
+            local function chessCall(method, path, body)
+                if not request then return nil, false end
+                local ok, res = pcall(function()
+                    return request({Url = CHESS_ROOT .. "/" .. path .. ".json?auth=" .. AUTH_TOKEN,
+                        Method = method, Headers = { ["Content-Type"] = "application/json" },
+                        Body = body and HttpService:JSONEncode(body) or nil})
+                end)
+                if not ok or type(res) ~= "table" then return nil, false end
+                local code = res.StatusCode or res.status_code
+                if code and code >= 400 then return nil, false end
+                local raw = res.Body or res.body
+                if type(raw) ~= "string" or raw == "" or raw == "null" then return nil, true end
+                local good, decoded = pcall(function() return HttpService:JSONDecode(raw) end)
+                return good and decoded or nil, good
+            end
+            local myId = tostring(LocalPlayer.UserId)
+            local myDisplay = LocalPlayer.DisplayName or LocalPlayer.Name
+            local difficultyMenu = Instance.new("Frame")
+            difficultyMenu.Name = "ChessStartMenu"
+            difficultyMenu.Size = UDim2.new(1, 0, 1, 0)
+            difficultyMenu.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            difficultyMenu.BorderSizePixel = 0
+            difficultyMenu.ZIndex = Z + 20
+            difficultyMenu.Parent = overlay
+
+            local menuBox = Instance.new("Frame")
+            menuBox.AnchorPoint = Vector2.new(0.5, 0.5)
+            menuBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+            menuBox.Size = UDim2.new(0.86, 0, 0, 300)
+            menuBox.BackgroundColor3 = Color3.fromRGB(15, 18, 24)
+            menuBox.BorderSizePixel = 0
+            menuBox.ZIndex = Z + 21
+            menuBox.Parent = difficultyMenu
+            Instance.new("UICorner", menuBox).CornerRadius = UDim.new(0, 14)
+            local menuStroke = Instance.new("UIStroke", menuBox)
+            menuStroke.Color = THEME; menuStroke.Thickness = 2
+
+            local menuTitle = Instance.new("TextLabel")
+            menuTitle.BackgroundTransparency = 1
+            menuTitle.Position = UDim2.new(0, 10, 0, 20)
+            menuTitle.Size = UDim2.new(1, -20, 0, 42)
+            menuTitle.Font = Enum.Font.Arcade; menuTitle.Text = "اختر طريقة اللعب"
+            menuTitle.TextColor3 = Color3.fromRGB(235, 245, 255); menuTitle.TextScaled = true
+            menuTitle.ZIndex = Z + 22; menuTitle.Parent = menuBox
+
+            local menuHint = Instance.new("TextLabel")
+            menuHint.BackgroundTransparency = 1
+            menuHint.Position = UDim2.new(0, 12, 0, 66)
+            menuHint.Size = UDim2.new(1, -24, 0, 28)
+            menuHint.Font = Enum.Font.Gotham; menuHint.Text = "العب ضد الكمبيوتر أو تحدَّ لاعباً متصلاً"
+            menuHint.TextColor3 = GRAY; menuHint.TextSize = 13
+            menuHint.ZIndex = Z + 22; menuHint.Parent = menuBox
+
+            local chosenLevel = 2
+            local playersPanel, beginMatchBtn, backModeBtn, status, oppBar, oppStroke, oppCap, plrBar, plrStroke, plrCap, arrowBtn
+            local isMultiplayer, myColor, matchId, moveSeq, opponentName = false, "w", nil, 0, nil
+            local difficultyButtons = {}
+            local modeButtons = Instance.new("Frame")
+            -- أزرار اختيار الوضع تُرسم مباشرة فوق خلفية القائمة، بعيداً عن أي حاوية قد تخفيها.
+            modeButtons.BackgroundTransparency = 1
+            modeButtons.AnchorPoint = Vector2.new(0.5, 0.5)
+            modeButtons.Position = UDim2.new(0.5, 0, 0.56, 0)
+            modeButtons.Size = UDim2.new(0.72, 0, 0, 76)
+            modeButtons.ZIndex = Z + 25
+            modeButtons.Visible = true
+            modeButtons.Parent = difficultyMenu
+            local botsBtn = mkBtn("🤖 البتات", Color3.fromRGB(55, 115, 80), modeButtons, function()
+                menuTitle.Text = "اختر مستوى البتات"
+                menuHint.Text = "حدد الصعوبة ثم ابدأ المباراة"
+                modeButtons.Visible = false
+                for _, b in ipairs(difficultyButtons) do b.Visible = true end
+                beginMatchBtn.Visible = true
+                backModeBtn.Visible = true
+            end)
+            botsBtn.Position = UDim2.new(0, 0, 0, 0); botsBtn.Size = UDim2.new(0.48, 0, 1, 0)
+            -- الأزرار لازم تكون فوق إطار الحاوية؛ وإلا تبقى مناطق الضغط موجودة لكن النص/الزر يختفي خلفها.
+            botsBtn.ZIndex = Z + 26
+            local playersBtn = mkBtn("👥 لاعبين", Color3.fromRGB(65, 85, 155), modeButtons, function()
+                difficultyMenu.Visible = false
+                card.Visible = true
+                if playersPanel then playersPanel.Visible = true end
+                if arrowBtn then arrowBtn.Visible = true end
+                if newGame then newGame() end
+            end)
+            playersBtn.Position = UDim2.new(0.52, 0, 0, 0); playersBtn.Size = UDim2.new(0.48, 0, 1, 0)
+            playersBtn.ZIndex = Z + 26
+            botsBtn.Visible = true
+            playersBtn.Visible = true
+            botsBtn.TextTransparency = 0
+            playersBtn.TextTransparency = 0
+            botsBtn.BackgroundTransparency = 0
+            playersBtn.BackgroundTransparency = 0
+
+            for i, info in ipairs(LEVELS) do
+                local idx = i
+                local b = mkBtn(info.name, info.color, menuBox, function()
+                    chosenLevel = idx
+                    for j, ob in ipairs(difficultyButtons) do
+                        ob.Text = (j == chosenLevel and "✓ " or "") .. LEVELS[j].name
+                        ob.BackgroundTransparency = (j == chosenLevel) and 0 or 0.28
+                    end
+                end)
+                b.Position = UDim2.new(0.08 + (idx - 1) * 0.285, 0, 0, 116)
+                b.Size = UDim2.new(0.265, 0, 0, 48); b.Visible = false
+                b.ZIndex = Z + 23; b.Text = (idx == chosenLevel and "✓ " or "") .. info.name
+                difficultyButtons[idx] = b
+            end
+            beginMatchBtn = mkBtn("▶ ابدأ اللعب", Color3.fromRGB(45, 130, 85), menuBox, function()
+                level = chosenLevel; difficultyMenu.Visible = false; card.Visible = true
+                if newGame then newGame() end
+            end)
+            beginMatchBtn.Position = UDim2.new(0.15, 0, 0, 190)
+            beginMatchBtn.Size = UDim2.new(0.7, 0, 0, 48); beginMatchBtn.Visible = false
+            beginMatchBtn.ZIndex = Z + 23
+            backModeBtn = mkBtn("رجوع", Color3.fromRGB(75, 80, 92), menuBox, function()
+                menuTitle.Text = "اختر طريقة اللعب"; menuHint.Text = "العب ضد الكمبيوتر أو تحدَّ لاعباً متصلاً"
+                modeButtons.Visible = true; beginMatchBtn.Visible = false; backModeBtn.Visible = false
+                for _, b in ipairs(difficultyButtons) do b.Visible = false end
+            end)
+            backModeBtn.Position = UDim2.new(0.15, 0, 0, 246)
+            backModeBtn.Size = UDim2.new(0.7, 0, 0, 38); backModeBtn.Visible = false
+            backModeBtn.ZIndex = Z + 23
+
+            -- قائمة اللاعبين تفتح من السهم الموجود عند طرف اللوحة السوداء.
+            playersPanel = Instance.new("Frame")
+            playersPanel.Name = "ChessPlayersPanel"
+            playersPanel.Size = UDim2.new(0, 230, 1, 0)
+            playersPanel.Position = UDim2.new(0, 0, 0, 0)
+            playersPanel.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+            playersPanel.BorderSizePixel = 0; playersPanel.Visible = false
+            playersPanel.ZIndex = Z + 12; playersPanel.Parent = overlay
+            local panelTitle = Instance.new("TextLabel")
+            panelTitle.BackgroundTransparency = 1; panelTitle.Position = UDim2.new(0, 8, 0, 12)
+            panelTitle.Size = UDim2.new(1, -16, 0, 34); panelTitle.Font = Enum.Font.Arcade
+            panelTitle.Text = "اللاعبون المتصلون"; panelTitle.TextSize = 15
+            panelTitle.TextColor3 = Color3.new(1,1,1); panelTitle.ZIndex = Z + 14; panelTitle.Parent = playersPanel
+            local playersScroll = Instance.new("ScrollingFrame")
+            playersScroll.Position = UDim2.new(0, 8, 0, 54); playersScroll.Size = UDim2.new(1, -16, 1, -64)
+            playersScroll.BackgroundTransparency = 1; playersScroll.BorderSizePixel = 0
+            playersScroll.ScrollBarThickness = 4; playersScroll.CanvasSize = UDim2.new(0,0,0,0)
+            playersScroll.ZIndex = Z + 14; playersScroll.Active = true; playersScroll.Parent = playersPanel
+            local playerLayout = Instance.new("UIListLayout", playersScroll)
+            playerLayout.Padding = UDim.new(0, 7); playerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            arrowBtn = mkBtn("❮", Color3.fromRGB(25, 25, 25), overlay, function()
+                if not playersPanel.Visible then
+                    difficultyMenu.Visible = false; card.Visible = true
+                    playersPanel.Visible = true
+                    playersPanel.Position = UDim2.new(0, -230, 0, 0)
+                    TweenService:Create(playersPanel, TweenInfo.new(0.28, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                        {Position=UDim2.new(0, 0, 0, 0)}):Play()
+                else
+                    local tw = TweenService:Create(playersPanel, TweenInfo.new(0.22, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+                        {Position=UDim2.new(0, -230, 0, 0)})
+                    tw.Completed:Connect(function() if playersPanel then playersPanel.Visible = false end end)
+                    tw:Play()
+                end
+            end)
+            arrowBtn.AnchorPoint = Vector2.new(0.5, 0.5)
+            arrowBtn.Position = UDim2.new(0.5, 0, 0.5, 0)
+            arrowBtn.Size = UDim2.new(0, 34, 0, 54); arrowBtn.ZIndex = Z + 16
+            arrowBtn.Visible = false
+            local function refreshPlayers()
+                if not alive or not playersPanel.Parent then return end
+                local data = chessCall("GET", "online", nil)
+                for _, child in ipairs(playersScroll:GetChildren()) do if child:IsA("Frame") or child:IsA("TextLabel") then child:Destroy() end end
+                local count, now = 0, os.time()
+                if type(data) == "table" then
+                    for uid, entry in pairs(data) do
+                        if tostring(uid) ~= myId and type(entry) == "table" and tonumber(entry.updatedAt) and now - tonumber(entry.updatedAt) <= 45 then
+                            count = count + 1
+                            local row = Instance.new("Frame"); row.Size = UDim2.new(1, -4, 0, 48)
+                            row.BackgroundColor3 = Color3.fromRGB(24, 27, 34); row.BorderSizePixel = 0
+                            row.ZIndex = Z + 15; row.Parent = playersScroll; row.Active = true
+                            Instance.new("UICorner", row).CornerRadius = UDim.new(0,7)
+                            local nm = Instance.new("TextLabel"); nm.BackgroundTransparency = 1; nm.Position = UDim2.new(0,6,0,0)
+                            nm.Size = UDim2.new(0.52,0,1,0); nm.Font = Enum.Font.GothamBold; nm.TextSize = 12
+                            nm.TextColor3 = Color3.new(1,1,1); nm.Text = tostring(entry.displayName or entry.name or "لاعب")
+                            nm.ZIndex = Z + 16; nm.Parent = row
+                            local function sendChessInvite()
+                                local inviteId = HttpService:GenerateGUID(false)
+                                local matchKey = HttpService:GenerateGUID(false)
+                                local targetName = tostring(entry.displayName or entry.name or "اللاعب")
+                                local sent, ok = chessCall("PUT", "invites/" .. tostring(uid), {
+                                    id=inviteId, matchId=matchKey, fromId=myId,
+                                    fromName=myDisplay, status="pending", createdAt=os.time()
+                                })
+                                if not ok then
+                                    status.Text = "تعذر إرسال الدعوة — تحقق من الاتصال"
+                                    status.TextColor3 = RED
+                                    return
+                                end
+                                pendingChallengeTarget = tostring(uid)
+                                pendingMatchId = matchKey
+                                pendingOpponentName = targetName
+                                status.Text = "تم إرسال الدعوة إلى " .. targetName .. " — بانتظار الرد"
+                                status.TextColor3 = GREEN
+                            end
+                            local invite = mkBtn("تحدّي", Color3.fromRGB(60, 105, 170), row, sendChessInvite)
+                            invite.Position = UDim2.new(0.58,0,0.16,0)
+                            invite.Size = UDim2.new(0.37,0,0.68,0)
+                            -- mkBtn يستخدم ZIndex عاماً أقل من البطاقة؛ ارفع الزر فوق البطاقة ومحتوياتها
+                            invite.ZIndex = Z + 18
+                            invite.Active = true
+                            invite.AutoButtonColor = true
+                        end
+                    end
+                end
+                if count == 0 then
+                    local empty = Instance.new("TextLabel"); empty.BackgroundTransparency = 1
+                    empty.Size = UDim2.new(1,0,0,55); empty.Font = Enum.Font.Gotham
+                    empty.Text = "ما فيه أحد متصل"; empty.TextColor3 = GRAY; empty.TextSize = 14
+                    empty.ZIndex = Z + 15; empty.Parent = playersScroll
+                end
+                playersScroll.CanvasSize = UDim2.new(0,0,0,math.max(60,count*55))
+            end
+            task.spawn(function()
+                while alive do
+                    if playersPanel.Visible then refreshPlayers() end
+                    task.wait(3)
+                end
+            end)
+
+            -- ---------- الشريط العلوي ----------
+            local topBar = Instance.new("Frame")
+            topBar.LayoutOrder = 1
+            topBar.Size = UDim2.new(1, 0, 0, 40)
+            topBar.BackgroundTransparency = 1
+            topBar.ZIndex = Z + 2
+            topBar.Parent = card
+
+            local title = Instance.new("TextLabel")
+            title.BackgroundTransparency = 1
+            title.Size = UDim2.new(1, -50, 1, 0)
+            title.Position = UDim2.new(0, 50, 0, 0)
+            title.Font = Enum.Font.Arcade
+            title.TextSize = 22
+            title.TextColor3 = Color3.fromRGB(220, 255, 240)
+            title.TextXAlignment = Enum.TextXAlignment.Right
+            title.Text = "الشطرنج"
+            title.ZIndex = Z + 3
+            title.Parent = topBar
+
+            -- زر خروج ثابت أعلى يمين شاشة الشطرنج
+            local closeBtn = mkBtn("X", Color3.fromRGB(170, 60, 60), overlay, function()
+                if cleanup then cleanup() end
+            end)
+            closeBtn.Name = "ChessExitButton"
+            closeBtn.AnchorPoint = Vector2.new(1, 0)
+            closeBtn.Size = UDim2.new(0, 40, 0, 36)
+            closeBtn.Position = UDim2.new(1, -12, 0, 12)
+            closeBtn.ZIndex = Z + 100
+
+            -- ---------- شريط اللاعب ----------
+            local function mkPlayerBar(order, name)
+                local bar = Instance.new("Frame")
+                bar.LayoutOrder = order
+                bar.Size = UDim2.new(1, 0, 0, 34)
+                bar.BackgroundColor3 = BAR
+                bar.BorderSizePixel = 0
+                bar.ZIndex = Z + 2
+                Instance.new("UICorner", bar).CornerRadius = UDim.new(0, 8)
+                local st = Instance.new("UIStroke", bar)
+                st.Color = Color3.fromRGB(60, 72, 88)
+                st.Thickness = 1.5
+                bar.Parent = card
+
+                local nameLbl = Instance.new("TextLabel")
+                nameLbl.BackgroundTransparency = 1
+                nameLbl.Size = UDim2.new(0.5, -10, 1, 0)
+                nameLbl.Position = UDim2.new(0.5, 0, 0, 0)
+                nameLbl.Font = Enum.Font.Arcade
+                nameLbl.TextSize = 14
+                nameLbl.TextColor3 = Color3.fromRGB(225, 235, 245)
+                nameLbl.TextXAlignment = Enum.TextXAlignment.Right
+                nameLbl.Text = name
+                nameLbl.ZIndex = Z + 3
+                nameLbl.Parent = bar
+
+                local capHolder = Instance.new("Frame")
+                capHolder.BackgroundTransparency = 1
+                capHolder.Size = UDim2.new(0.5, -10, 1, 0)
+                capHolder.Position = UDim2.new(0, 8, 0, 0)
+                capHolder.ZIndex = Z + 3
+                capHolder.Parent = bar
+                local capList = Instance.new("UIListLayout", capHolder)
+                capList.FillDirection = Enum.FillDirection.Horizontal
+                capList.VerticalAlignment = Enum.VerticalAlignment.Center
+                capList.SortOrder = Enum.SortOrder.LayoutOrder
+                capList.Padding = UDim.new(0, 3)
+                return bar, st, capHolder
+            end
+
+            oppBar, oppStroke, oppCap = mkPlayerBar(2, "الخصم · الأسود")
+
+            -- ---------- اللوحة ----------
+            local board = Instance.new("Frame")
+            board.LayoutOrder = 3
+            board.Size = UDim2.new(0, 320, 0, 320)
+            board.BackgroundColor3 = Color3.fromRGB(20, 26, 22)
+            board.BorderSizePixel = 0
+            board.ZIndex = Z + 2
+            board.Parent = card
+            local boardStroke = Instance.new("UIStroke", board)
+            boardStroke.Color = THEME
+            boardStroke.Thickness = 3
+            boardStroke.Transparency = 0.15
+
+            plrBar, plrStroke, plrCap = mkPlayerBar(4, "أنت · الأبيض")
+
+            status = Instance.new("TextLabel")
+            status.LayoutOrder = 5
+            status.Size = UDim2.new(1, 0, 0, 26)
+            status.BackgroundTransparency = 1
+            status.Font = Enum.Font.Arcade
+            status.TextSize = 16
+            status.TextWrapped = true
+            status.TextColor3 = GREEN
+            status.Text = ""
+            status.ZIndex = Z + 3
+            status.Parent = card
+
+            local btnRow = Instance.new("Frame")
+            btnRow.LayoutOrder = 6
+            btnRow.Size = UDim2.new(1, 0, 0, 38)
+            btnRow.BackgroundTransparency = 1
+            btnRow.ZIndex = Z + 2
+            btnRow.Parent = card
+            local rowList = Instance.new("UIListLayout", btnRow)
+            rowList.FillDirection = Enum.FillDirection.Horizontal
+            rowList.Padding = UDim.new(0, 6)
+            rowList.SortOrder = Enum.SortOrder.LayoutOrder
+
+            -- ---------- رسم القطع بالأشكال (ما تعتمد على الخطوط) ----------
+            local PIECE_FULL = {K = "ملك", Q = "وزير", R = "قلعة", B = "فيل", N = "حصان", P = "بيدق"}
+            local PIECE_SHORT = {K = "م", Q = "و", R = "ق", B = "ف", N = "ح", P = "ب"}
+            local PIECE_SIZE = {K = 0.90, Q = 0.84, R = 0.78, B = 0.78, N = 0.78, P = 0.66}
+            -- قطعة = قرص بسيط مكتوب عليه اسمها بالعربي (بدون أي شكل إنسان أو حيوان)
+            local function drawPiece(parent, t, col, z, thick, short)
+                thick = thick or 2
+                local fill, line, txt
+                if col == "w" then
+                    fill = Color3.fromRGB(252, 248, 232)
+                    line = Color3.fromRGB(45, 32, 22)
+                    txt = Color3.fromRGB(35, 25, 15)
+                else
+                    fill = Color3.fromRGB(48, 44, 48)
+                    line = Color3.fromRGB(225, 220, 200)
+                    txt = Color3.fromRGB(250, 245, 230)
+                end
+                local size = PIECE_SIZE[t] or 0.78
+                local disc = Instance.new("Frame")
+                disc.AnchorPoint = Vector2.new(0.5, 0.5)
+                disc.Position = UDim2.new(0.5, 0, 0.5, 0)
+                disc.Size = UDim2.new(size, 0, size, 0)
+                disc.BackgroundColor3 = fill
+                disc.BorderSizePixel = 0
+                disc.ZIndex = z + 1
+                disc.Parent = parent
+                Instance.new("UICorner", disc).CornerRadius = UDim.new(0.5, 0)
+                local st = Instance.new("UIStroke", disc)
+                st.Color = line
+                st.Thickness = thick
+                st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+                local lbl = Instance.new("TextLabel")
+                lbl.BackgroundTransparency = 1
+                lbl.AnchorPoint = Vector2.new(0.5, 0.5)
+                lbl.Position = UDim2.new(0.5, 0, 0.5, 0)
+                lbl.Size = UDim2.new(0.86, 0, 0.56, 0)
+                lbl.Font = Enum.Font.Arcade
+                lbl.TextScaled = true
+                lbl.TextColor3 = txt
+                lbl.Text = short and PIECE_SHORT[t] or PIECE_FULL[t]
+                lbl.ZIndex = z + 2
+                lbl.Parent = disc
+                Instance.new("UITextSizeConstraint", lbl).MaxTextSize = 30
+            end
+
+            -- أيقونة مربعة داخل أي عنصر (للترقية)
+            local function pieceIcon(parent, t, col, z)
+                local h = Instance.new("Frame")
+                h.BackgroundTransparency = 1
+                h.AnchorPoint = Vector2.new(0.5, 0.5)
+                h.Position = UDim2.new(0.5, 0, 0.5, 0)
+                h.Size = UDim2.new(0.9, 0, 0.9, 0)
+                h.ZIndex = z
+                h.Parent = parent
+                local ar = Instance.new("UIAspectRatioConstraint", h)
+                ar.AspectRatio = 1
+                ar.DominantAxis = Enum.DominantAxis.Width
+                drawPiece(h, t, col, z)
+                return h
+            end
+
+            local function setPiece(sq, p)
+                if sq.cur == p then return end
+                sq.holder:ClearAllChildren()
+                sq.cur = p
+                if p then drawPiece(sq.holder, p:sub(2, 2), p:sub(1, 1), Z + 6) end
+            end
+
+            local onSquare -- تُعرّف بعدين
+            -- تدوير الرقعة 180 درجة للاعب الأسود حتى تظهر قطعه دائماً بالأسفل.
+            local function boardCellPosition(r, c)
+                if isMultiplayer and myColor == "b" then
+                    return 9 - r, 9 - c
+                end
+                return r, c
+            end
+
+            for r = 1, 8 do
+                squares[r] = {}
+                for c = 1, 8 do
+                    local light = (r + c) % 2 == 0
+                    local btn = Instance.new("TextButton")
+                    btn.Size = UDim2.new(0.125, 0, 0.125, 0)
+                    local displayR, displayC = boardCellPosition(r, c)
+                    btn.Position = UDim2.new((displayC - 1) * 0.125, 0, (displayR - 1) * 0.125, 0)
+                    btn.BackgroundColor3 = light and LIGHT or DARK
+                    btn.BorderSizePixel = 0
+                    btn.AutoButtonColor = false
+                    btn.Text = ""
+                    btn.ZIndex = Z + 3
+                    btn.Parent = board
+
+                    local hl = Instance.new("Frame")
+                    hl.Size = UDim2.new(1, 0, 1, 0)
+                    hl.BackgroundTransparency = 1
+                    hl.BorderSizePixel = 0
+                    hl.ZIndex = Z + 4
+                    hl.Parent = btn
+
+                    local ring = Instance.new("Frame")
+                    ring.AnchorPoint = Vector2.new(0.5, 0.5)
+                    ring.Position = UDim2.new(0.5, 0, 0.5, 0)
+                    ring.Size = UDim2.new(0.94, 0, 0.94, 0)
+                    ring.BackgroundTransparency = 1
+                    ring.ZIndex = Z + 5
+                    ring.Visible = false
+                    ring.Parent = btn
+                    Instance.new("UICorner", ring).CornerRadius = UDim.new(1, 0)
+                    local ringStroke = Instance.new("UIStroke", ring)
+                    ringStroke.Color = Color3.fromRGB(35, 70, 35)
+                    ringStroke.Thickness = 3
+                    ringStroke.Transparency = 0.25
+
+                    local dot = Instance.new("Frame")
+                    dot.AnchorPoint = Vector2.new(0.5, 0.5)
+                    dot.Position = UDim2.new(0.5, 0, 0.5, 0)
+                    dot.Size = UDim2.new(0.3, 0, 0.3, 0)
+                    dot.BackgroundColor3 = Color3.fromRGB(35, 70, 35)
+                    dot.BackgroundTransparency = 0.45
+                    dot.BorderSizePixel = 0
+                    dot.ZIndex = Z + 5
+                    dot.Visible = false
+                    dot.Parent = btn
+                    Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+
+                    -- إحداثيات صغيرة (أرقام يسار، حروف تحت)
+                    local coordColor = light and DARK or LIGHT
+                    if c == 1 then
+                        local n = Instance.new("TextLabel")
+                        n.Name = "RankCoordinate"
+                        n.BackgroundTransparency = 1
+                        n.Position = UDim2.new(0, 2, 0, 0)
+                        n.Size = UDim2.new(0.35, 0, 0.3, 0)
+                        n.Font = Enum.Font.GothamBold
+                        n.TextScaled = true
+                        n.TextXAlignment = Enum.TextXAlignment.Left
+                        n.TextColor3 = coordColor
+                        n.Text = tostring(9 - displayR)
+                        n.ZIndex = Z + 5
+                        n.Parent = btn
+                    end
+                    if r == 8 then
+                        local f = Instance.new("TextLabel")
+                        f.Name = "FileCoordinate"
+                        f.BackgroundTransparency = 1
+                        f.AnchorPoint = Vector2.new(1, 1)
+                        f.Position = UDim2.new(1, -2, 1, 0)
+                        f.Size = UDim2.new(0.35, 0, 0.3, 0)
+                        f.Font = Enum.Font.GothamBold
+                        f.TextScaled = true
+                        f.TextXAlignment = Enum.TextXAlignment.Right
+                        f.TextColor3 = coordColor
+                        f.Text = ("abcdefgh"):sub(displayC, displayC)
+                        f.ZIndex = Z + 5
+                        f.Parent = btn
+                    end
+
+                    local holder = Instance.new("Frame")
+                    holder.BackgroundTransparency = 1
+                    holder.Size = UDim2.new(1, 0, 1, 0)
+                    holder.ZIndex = Z + 6
+                    holder.Parent = btn
+                    btn.MouseButton1Click:Connect(function()
+                        if onSquare then onSquare(r, c) end
+                    end)
+                    squares[r][c] = {btn = btn, hl = hl, ring = ring, dot = dot, holder = holder, cur = false}
+                end
+            end
+
+            local function applyBoardOrientation()
+                for r = 1, 8 do
+                    for c = 1, 8 do
+                        local cell = squares[r][c]
+                        local displayR, displayC = boardCellPosition(r, c)
+                        cell.btn.Position = UDim2.new((displayC - 1) * 0.125, 0, (displayR - 1) * 0.125, 0)
+                        local rankLabel = cell.btn:FindFirstChild("RankCoordinate")
+                        local fileLabel = cell.btn:FindFirstChild("FileCoordinate")
+                        if rankLabel then rankLabel.Text = tostring(9 - displayR) end
+                        if fileLabel then fileLabel.Text = ("abcdefgh"):sub(displayC, displayC) end
+                    end
+                end
+            end
+
+            -- ---------- نافذة ترقية البيدق ----------
+            local promoLayer = Instance.new("TextButton")
+            promoLayer.Size = UDim2.new(1, 0, 1, 0)
+            promoLayer.BackgroundColor3 = Color3.new(0, 0, 0)
+            promoLayer.BackgroundTransparency = 0.4
+            promoLayer.BorderSizePixel = 0
+            promoLayer.AutoButtonColor = false
+            promoLayer.Text = ""
+            promoLayer.Visible = false
+            promoLayer.ZIndex = Z + 20
+            promoLayer.Parent = board
+
+            local promoBox = Instance.new("Frame")
+            promoBox.AnchorPoint = Vector2.new(0.5, 0.5)
+            promoBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+            promoBox.Size = UDim2.new(0.92, 0, 0.3, 0)
+            promoBox.BackgroundColor3 = Color3.fromRGB(28, 33, 41)
+            promoBox.BorderSizePixel = 0
+            promoBox.ZIndex = Z + 21
+            promoBox.Parent = promoLayer
+            Instance.new("UICorner", promoBox).CornerRadius = UDim.new(0, 10)
+            local pbStroke = Instance.new("UIStroke", promoBox)
+            pbStroke.Color = THEME
+            pbStroke.Thickness = 2
+            local pbList = Instance.new("UIListLayout", promoBox)
+            pbList.FillDirection = Enum.FillDirection.Horizontal
+            pbList.HorizontalAlignment = Enum.HorizontalAlignment.Center
+            pbList.VerticalAlignment = Enum.VerticalAlignment.Center
+            pbList.Padding = UDim.new(0, 6)
+
+            local playerMove -- تُعرّف بعدين
+            for _, t in ipairs({"Q", "R", "B", "N"}) do
+                local pb = Instance.new("TextButton")
+                pb.Size = UDim2.new(0.2, 0, 0.8, 0)
+                pb.BackgroundColor3 = Color3.fromRGB(45, 55, 70)
+                pb.BorderSizePixel = 0
+                pb.Text = ""
+                pb.AutoButtonColor = true
+                pb.ZIndex = Z + 22
+                pb.Parent = promoBox
+                Instance.new("UICorner", pb).CornerRadius = UDim.new(0, 8)
+                pieceIcon(pb, t, (isMultiplayer and myColor or "w"), Z + 23)
+                pb.MouseButton1Click:Connect(function()
+                    if not pendingPromo then return end
+                    local m = pendingPromo
+                    pendingPromo = nil
+                    promoLayer.Visible = false
+                    playerMove({fr = m.fr, fc = m.fc, tr = m.tr, tc = m.tc, promo = true, pt = t})
+                end)
+            end
+            promoLayer.MouseButton1Click:Connect(function()
+                pendingPromo = nil
+                promoLayer.Visible = false
+            end)
+
+            -- ---------- نافذة النتيجة ----------
+            local resultLayer = Instance.new("Frame")
+            resultLayer.Size = UDim2.new(1, 0, 1, 0)
+            resultLayer.BackgroundColor3 = Color3.new(0, 0, 0)
+            resultLayer.BackgroundTransparency = 0.35
+            resultLayer.BorderSizePixel = 0
+            resultLayer.Active = true
+            resultLayer.Visible = false
+            resultLayer.ZIndex = Z + 25
+            resultLayer.Parent = board
+
+            local resBox = Instance.new("Frame")
+            resBox.AnchorPoint = Vector2.new(0.5, 0.5)
+            resBox.Position = UDim2.new(0.5, 0, 0.5, 0)
+            resBox.Size = UDim2.new(0.82, 0, 0.5, 0)
+            resBox.BackgroundColor3 = Color3.fromRGB(28, 33, 41)
+            resBox.BorderSizePixel = 0
+            resBox.ZIndex = Z + 26
+            resBox.Parent = resultLayer
+            Instance.new("UICorner", resBox).CornerRadius = UDim.new(0, 12)
+            local rbStroke = Instance.new("UIStroke", resBox)
+            rbStroke.Color = GOLD
+            rbStroke.Thickness = 2
+
+            local resTitle = Instance.new("TextLabel")
+            resTitle.BackgroundTransparency = 1
+            resTitle.Size = UDim2.new(1, -16, 0.34, 0)
+            resTitle.Position = UDim2.new(0, 8, 0.06, 0)
+            resTitle.Font = Enum.Font.Arcade
+            resTitle.TextScaled = true
+            resTitle.TextColor3 = GOLD
+            resTitle.Text = ""
+            resTitle.ZIndex = Z + 27
+            resTitle.Parent = resBox
+            Instance.new("UITextSizeConstraint", resTitle).MaxTextSize = 28
+
+            local resSub = Instance.new("TextLabel")
+            resSub.BackgroundTransparency = 1
+            resSub.Size = UDim2.new(1, -16, 0.2, 0)
+            resSub.Position = UDim2.new(0, 8, 0.42, 0)
+            resSub.Font = Enum.Font.Arcade
+            resSub.TextScaled = true
+            resSub.TextColor3 = GRAY
+            resSub.Text = ""
+            resSub.ZIndex = Z + 27
+            resSub.Parent = resBox
+            Instance.new("UITextSizeConstraint", resSub).MaxTextSize = 14
+
+            local resBtnRow = Instance.new("Frame")
+            resBtnRow.BackgroundTransparency = 1
+            resBtnRow.AnchorPoint = Vector2.new(0.5, 1)
+            resBtnRow.Position = UDim2.new(0.5, 0, 1, -10)
+            resBtnRow.Size = UDim2.new(1, -20, 0.26, 0)
+            resBtnRow.ZIndex = Z + 27
+            resBtnRow.Parent = resBox
+            local resList = Instance.new("UIListLayout", resBtnRow)
+            resList.FillDirection = Enum.FillDirection.Horizontal
+            resList.Padding = UDim.new(0, 6)
+
+            -- ---------- الرسم والحالة ----------
+            local INIT = {P = 8, N = 2, B = 2, R = 2, Q = 1}
+            local ORDER = {"Q", "R", "B", "N", "P"}
+            local PV = {P = 1, N = 3, B = 3, R = 5, Q = 9}
+
+            local function refreshInfo()
+                local cnt = {w = {}, b = {}}
+                local mat = {w = 0, b = 0}
+                for r = 1, 8 do
+                    for c = 1, 8 do
+                        local p = state.board[r][c]
+                        if p then
+                            local col, t = p:sub(1, 1), p:sub(2, 2)
+                            cnt[col][t] = (cnt[col][t] or 0) + 1
+                            if PV[t] then mat[col] = mat[col] + PV[t] end
+                        end
+                    end
+                end
+                local function fillCaptured(holder, col, adv)
+                    local parts, key = {}, tostring(adv)
+                    for _, t in ipairs(ORDER) do
+                        local miss = math.max(0, INIT[t] - (cnt[col][t] or 0))
+                        if miss > 0 then
+                            parts[#parts + 1] = {t, miss}
+                            key = key .. t .. tostring(miss)
+                        end
+                    end
+                    if holder:GetAttribute("key") == key then return end
+                    holder:SetAttribute("key", key)
+                    for _, ch in ipairs(holder:GetChildren()) do
+                        if ch:IsA("GuiObject") then ch:Destroy() end
+                    end
+                    for i, pr in ipairs(parts) do
+                        local icon = Instance.new("Frame")
+                        icon.LayoutOrder = i * 2
+                        icon.Size = UDim2.new(0, 24, 0, 24)
+                        icon.BackgroundTransparency = 1
+                        icon.ZIndex = Z + 3
+                        icon.Parent = holder
+                        drawPiece(icon, pr[1], col, Z + 4, 1, true)
+                        if pr[2] > 1 then
+                            local n = Instance.new("TextLabel")
+                            n.LayoutOrder = i * 2 + 1
+                            n.Size = UDim2.new(0, 16, 0, 24)
+                            n.BackgroundTransparency = 1
+                            n.Font = Enum.Font.GothamBold
+                            n.TextSize = 12
+                            n.TextColor3 = Color3.fromRGB(215, 225, 240)
+                            n.Text = "x" .. tostring(pr[2])
+                            n.ZIndex = Z + 3
+                            n.Parent = holder
+                        end
+                    end
+                    if adv > 0 then
+                        local a2 = Instance.new("TextLabel")
+                        a2.LayoutOrder = 100
+                        a2.Size = UDim2.new(0, 34, 0, 24)
+                        a2.BackgroundTransparency = 1
+                        a2.Font = Enum.Font.GothamBold
+                        a2.TextSize = 14
+                        a2.TextColor3 = GREEN
+                        a2.Text = "+" .. tostring(adv)
+                        a2.ZIndex = Z + 3
+                        a2.Parent = holder
+                    end
+                end
+                local diff = mat.w - mat.b
+                fillCaptured(oppCap, "w", (diff < 0) and (-diff) or 0)
+                fillCaptured(plrCap, "b", (diff > 0) and diff or 0)
+                local whiteTurn = state.turn == "w" and not gameOver
+                local blackTurn = state.turn == "b" and not gameOver
+                plrStroke.Color = whiteTurn and THEME or Color3.fromRGB(60, 72, 88)
+                oppStroke.Color = blackTurn and THEME or Color3.fromRGB(60, 72, 88)
+            end
+
+            local CHECK_C = Color3.fromRGB(235, 70, 70)
+            local LAST_C = Color3.fromRGB(255, 235, 90)
+
+            local function render()
+                local kr, kc
+                if Engine.inCheck(state) then kr, kc = Engine.findKing(state.board, state.turn) end
+                for r = 1, 8 do
+                    for c = 1, 8 do
+                        local sq = squares[r][c]
+                        local hlColor, hlTrans = LAST_C, 1
+                        if lastMove and ((lastMove.fr == r and lastMove.fc == c) or (lastMove.tr == r and lastMove.tc == c)) then
+                            hlTrans = 0.55
+                        end
+                        if selected and selected[1] == r and selected[2] == c then
+                            hlTrans = 0.25
+                        end
+                        if kr == r and kc == c then
+                            hlColor = CHECK_C
+                            hlTrans = 0.2
+                        end
+                        sq.hl.BackgroundColor3 = hlColor
+                        sq.hl.BackgroundTransparency = hlTrans
+                        sq.dot.Visible = false
+                        sq.ring.Visible = false
+                        setPiece(sq, state.board[r][c] or false)
+                    end
+                end
+                for _, m in ipairs(selMoves) do
+                    local sq = squares[m.tr][m.tc]
+                    if state.board[m.tr][m.tc] or m.ep then
+                        sq.ring.Visible = true
+                    else
+                        sq.dot.Visible = true
+                    end
+                end
+                refreshInfo()
+            end
+
+            local function showResultLater(titleText, subText)
+                resTitle.Text = titleText
+                resSub.Text = subText
+                local id = gameId
+                task.delay(0.7, function()
+                    if alive and id == gameId and gameOver then resultLayer.Visible = true end
+                end)
+            end
+
+            local function updateStatus()
+                resultLayer.Visible = false
+                gameOver = false
+                local moves = Engine.legalMoves(state)
+                if #moves == 0 then
+                    gameOver = true
+                    if Engine.inCheck(state) then
+                        local localWon = isMultiplayer and state.turn ~= myColor or (not isMultiplayer and state.turn == "b")
+                        if localWon then
+                            status.Text = "كش مات! فزت 🎉"
+                            status.TextColor3 = GOLD
+                            showResultLater("🏆 فزت!", "كش مات، ما شاء الله عليك")
+                        else
+                            status.Text = "كش مات! خسرت"
+                            status.TextColor3 = RED
+                            showResultLater("خسرت", "كش مات، جرّب مرة ثانية")
+                        end
+                    else
+                        status.Text = "تعادل (ستيل مات)"
+                        status.TextColor3 = GOLD
+                        showResultLater("تعادل", "ستيل مات: ما في حركة مسموحة")
+                    end
+                elseif Engine.insufficient(state) then
+                    gameOver = true
+                    status.Text = "تعادل (مواد غير كافية)"
+                    status.TextColor3 = GOLD
+                    showResultLater("تعادل", "ما بقي قطع كافية للمات")
+                elseif Engine.inCheck(state) then
+                    status.Text = (state.turn == "w") and "⚠️ كش! دورك" or "⚠️ كش! على الكمبيوتر"
+                    status.TextColor3 = RED
+                else
+                    if state.turn == "w" then
+                        status.Text = "دورك، حرّك قطعة بيضاء"
+                        status.TextColor3 = GREEN
+                    else
+                        status.Text = "الكمبيوتر يفكر..."
+                        status.TextColor3 = GRAY
+                    end
+                end
+            end
+
+            -- ---------- حركة القطعة (انزلاق) ----------
+            local function slide(m, piece, cb, dur)
+                local from = squares[m.fr][m.fc]
+                from.holder:ClearAllChildren()
+                from.cur = false
+                local ghost = Instance.new("Frame")
+                ghost.BackgroundTransparency = 1
+                ghost.Size = UDim2.new(0.125, 0, 0.125, 0)
+                local fromR, fromC = boardCellPosition(m.fr, m.fc)
+                local toR, toC = boardCellPosition(m.tr, m.tc)
+                ghost.Position = UDim2.new((fromC - 1) * 0.125, 0, (fromR - 1) * 0.125, 0)
+                ghost.ZIndex = Z + 15
+                ghost.Parent = board
+                local lift = Instance.new("UIScale", ghost)
+                lift.Scale = 1.12
+                drawPiece(ghost, piece:sub(2, 2), piece:sub(1, 1), Z + 15)
+                local tw = TweenService:Create(ghost,
+                    TweenInfo.new(dur or 0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    {Position = UDim2.new((toC - 1) * 0.125, 0, (toR - 1) * 0.125, 0)})
+                tw.Completed:Connect(function()
+                    ghost:Destroy()
+                    cb()
+                end)
+                tw:Play()
+            end
+
+            local function perform(m, done, dur)
+                local myGame = gameId
+                local piece = state.board[m.fr][m.fc]
+                busy = true
+                slide(m, piece, function()
+                    if not alive or myGame ~= gameId then return end
+                    state = Engine.applyMove(state, m)
+                    lastMove = m
+                    selected, selMoves = nil, {}
+                    busy = false
+                    updateStatus()
+                    render()
+                    if done then done() end
+                end, dur)
+            end
+
+            local function aiTurn()
+                if not alive or gameOver or state.turn ~= "b" then busy = false return end
+                busy = true
+                local myGame = gameId
+                local thinking = true
+                -- نقاط متحركة "يفكر..."
+                task.spawn(function()
+                    local i = 0
+                    while thinking and alive and myGame == gameId do
+                        status.Text = "الكمبيوتر يفكر" .. string.rep(".", i % 4)
+                        status.TextColor3 = GRAY
+                        i = i + 1
+                        task.wait(0.35)
+                    end
+                end)
+                local t0 = os.clock()
+                task.wait(0.3)
+                local m = Engine.pickMove(state, level)
+                -- أقل وقت تفكير حسب المستوى عشان يكون واقعي
+                local minT = ({1.0, 1.6, 2.4})[level] + math.random() * 0.9
+                local left = minT - (os.clock() - t0)
+                if left > 0 then task.wait(left) end
+                thinking = false
+                if not alive or myGame ~= gameId then return end
+                if not m then busy = false return end
+                -- "يمسك" القطعة: يظللها ويبين وين تقدر تروح لحظة قبل ما يحركها
+                selected = {m.fr, m.fc}
+                selMoves = {}
+                for _, mv in ipairs(Engine.legalMoves(state)) do
+                    if mv.fr == m.fr and mv.fc == m.fc then selMoves[#selMoves + 1] = mv end
+                end
+                render()
+                task.wait(0.6)
+                if not alive or myGame ~= gameId then return end
+                selMoves = {}
+                render()
+                perform(m, nil, 0.6)
+            end
+
+            playerMove = function(m)
+                if isMultiplayer and state.turn ~= myColor then return end
+                history[#history + 1] = {state = state, last = lastMove}
+                perform(m, function()
+                    if isMultiplayer and matchId then
+                        moveSeq = moveSeq + 1
+                        chessCall("PUT", "matches/" .. matchId .. "/moves/" .. tostring(moveSeq), {
+                            fr=m.fr, fc=m.fc, tr=m.tr, tc=m.tc, promo=m.promo and true or false,
+                            pt=m.pt, by=myColor, seq=moveSeq, sentAt=os.time()})
+                    elseif not gameOver and state.turn == "b" then
+                        busy = true
+                        task.spawn(aiTurn)
+                    end
+                end)
+            end
+
+            onSquare = function(r, c)
+                if not alive or busy or gameOver or state.turn ~= (isMultiplayer and myColor or "w") or pendingPromo then return end
+                if selected then
+                    for _, m in ipairs(selMoves) do
+                        if m.tr == r and m.tc == c then
+                            if m.promo then
+                                pendingPromo = m
+                                promoLayer.Visible = true
+                            else
+                                playerMove(m)
+                            end
+                            return
+                        end
+                    end
+                end
+                local p = state.board[r][c]
+                if p and p:sub(1, 1) == (isMultiplayer and myColor or "w") then
+                    if selected and selected[1] == r and selected[2] == c then
+                        selected, selMoves = nil, {}
+                        updateStatus()
+                    else
+                        selected = {r, c}
+                        selMoves = {}
+                        for _, m in ipairs(Engine.legalMoves(state)) do
+                            if m.fr == r and m.fc == c then selMoves[#selMoves + 1] = m end
+                        end
+                        status.Text = "اخترت: " .. NAMES[p:sub(2, 2)] .. (#selMoves == 0 and " (ما له حركة)" or "")
+                        status.TextColor3 = GREEN
+                    end
+                else
+                    selected, selMoves = nil, {}
+                    updateStatus()
+                end
+                render()
+            end
+
+            task.spawn(function()
+                while alive do
+                    if isMultiplayer and matchId and not busy and not gameOver and state.turn ~= myColor then
+                        local remote = chessCall("GET", "matches/" .. matchId .. "/moves/" .. tostring(moveSeq + 1), nil)
+                        if type(remote) == "table" and tonumber(remote.seq) == moveSeq + 1 and remote.by ~= myColor then
+                            local chosen
+                            for _, candidate in ipairs(Engine.legalMoves(state)) do
+                                if candidate.fr == tonumber(remote.fr) and candidate.fc == tonumber(remote.fc)
+                                    and candidate.tr == tonumber(remote.tr) and candidate.tc == tonumber(remote.tc) then
+                                    if candidate.promo then candidate.pt = remote.pt or "Q" end
+                                    chosen = candidate; break
+                                end
+                            end
+                            if chosen then
+                                busy = true
+                                perform(chosen, function() moveSeq = moveSeq + 1 end)
+                            end
+                        end
+                    end
+                    task.wait(0.8)
+                end
+            end)
+
+            newGame = function()
+                gameId = gameId + 1
+                state = Engine.newState()
+                moveSeq = 0
+                history = {}
+                selected, selMoves, lastMove = nil, {}, nil
+                busy, gameOver = false, false
+                pendingPromo = nil
+                promoLayer.Visible = false
+                resultLayer.Visible = false
+                updateStatus()
+                render()
+            end
+
+            local function undo()
+                if busy or pendingPromo or #history == 0 then return end
+                local h = table.remove(history)
+                gameId = gameId + 1
+                state = h.state
+                lastMove = h.last
+                selected, selMoves = nil, {}
+                updateStatus()
+                render()
+            end
+
+            -- لا توجد أزرار إعادة أو تراجع أثناء المباراة؛ تظهر الخيارات بعد انتهائها فقط.
+            btnRow.Visible = false
+
+            -- خيارا نهاية المباراة: إعادة اللعب أو الخروج.
+            local again = mkBtn("🔄 العب مرة ثانية", Color3.fromRGB(45, 130, 85), resBtnRow, newGame)
+            again.Size = UDim2.new(0.5, -3, 1, 0)
+            again.TextScaled = true
+            local exitResultBtn = mkBtn("✖ خروج", Color3.fromRGB(150, 55, 65), resBtnRow, function()
+                if cleanup then cleanup() end
+            end)
+            exitResultBtn.Size = UDim2.new(0.5, -3, 1, 0)
+            exitResultBtn.TextScaled = true
+
+            -- ---------- الحجم المتجاوب ----------
+            local function setBox(o, x, y, w, h)
+                o.Position = UDim2.new(0, x, 0, y)
+                o.Size = UDim2.new(0, w, 0, h)
+            end
+
+            local function layout()
+                local sz = overlay.AbsoluteSize
+                local X, Y = sz.X, sz.Y
+                if X >= Y * 1.2 then
+                    -- أفقي: اللوحة كبيرة يسار والمعلومات والأزرار يمين
+                    local s = math.min(Y - 24, X - 40 - 230)
+                    s = math.clamp(math.floor(s / 8) * 8, 160, 640)
+                    local p = math.clamp(X - 40 - s, 230, 330)
+                    card.Size = UDim2.new(0, s + 16 + p, 0, s)
+                    arrowBtn.Position = UDim2.new(0.5, -card.Size.X.Offset / 2 + p, 0.5, 0)
+                    board.Position = UDim2.new(0, p + 16, 0, 0)
+                    board.Size = UDim2.new(0, s, 0, s)
+                    local px = 0
+                    setBox(topBar, px, 0, p, 40)
+                    setBox(oppBar, px, 50, p, 46)
+                    setBox(plrBar, px, s - 100, p, 46)
+                    setBox(btnRow, px, s - 44, p, 44)
+                    local midTop, midBot = 96, s - 100
+                    setBox(status, px, midTop + (midBot - midTop) / 2 - 24, p, 48)
+                else
+                    -- عمودي: كل شي فوق بعض
+                    local s = math.min(X - 24, Y - 240)
+                    s = math.clamp(math.floor(s / 8) * 8, 160, 520)
+                    card.Size = UDim2.new(0, s, 0, s + 166)
+                    arrowBtn.Position = UDim2.new(0.5, card.Size.X.Offset / 2, 0.5, 0)
+                    setBox(topBar, 0, 0, s, 40)
+                    setBox(oppBar, 0, 46, s, 34)
+                    board.Position = UDim2.new(0, 0, 0, 86)
+                    board.Size = UDim2.new(0, s, 0, s)
+                    setBox(plrBar, 0, 92 + s, s, 34)
+                    setBox(status, 0, 132 + s, s, 26)
+                    setBox(btnRow, 0, 164 + s, s, 38)
+                end
+            end
+            layout()
+            conns[#conns + 1] = overlay:GetPropertyChangedSignal("AbsoluteSize"):Connect(layout)
+
+            -- ---------- الإغلاق ----------
+            cleanup = function()
+                alive = false
+                for _, cn in ipairs(conns) do
+                    pcall(function() cn:Disconnect() end)
+                end
+                if overlay then overlay:Destroy() end
+                if activeGame == cleanup then activeGame = nil end
+            end
+            activeGame = cleanup
+            closeBtn.MouseButton1Click:Connect(cleanup)
+
+            card.Visible = false
+            difficultyMenu.Visible = true
+            if queuedChessInvite then
+                local q = queuedChessInvite
+                queuedChessInvite = nil
+                isMultiplayer = true
+                myColor = q.role == "sender" and "w" or "b"
+                matchId = q.matchId
+                moveSeq = 0
+                applyBoardOrientation()
+                opponentName = q.opponentName or "الخصم"
+                if myColor == "w" then
+                    oppBar:FindFirstChildWhichIsA("TextLabel").Text = tostring(opponentName) .. " · الأسود"
+                    plrBar:FindFirstChildWhichIsA("TextLabel").Text = "أنت · الأبيض"
+                else
+                    oppBar:FindFirstChildWhichIsA("TextLabel").Text = tostring(opponentName) .. " · الأبيض"
+                    plrBar:FindFirstChildWhichIsA("TextLabel").Text = "أنت · الأسود"
+                end
+                difficultyMenu.Visible = false
+                playersPanel.Visible = false
+                card.Visible = true
+                if newGame then newGame() end
+                status.Text = "بدأت مباراة الشطرنج ضد " .. tostring(opponentName)
+            end
+        end
+
+        startBtn.Activated:Connect(function() launch() end)
+
+        -- مستقبِل الدعوات يعمل طوال تشغيل السكربت، حتى لو المستخدم خارج صفحة الشطرنج.
+        do
+            local inviteGui = Instance.new("Frame")
+            inviteGui.Name = "ChessGlobalInvite"
+            inviteGui.AnchorPoint = Vector2.new(0.5, 0)
+            inviteGui.Position = UDim2.new(0.5, 0, 0, -112)
+            inviteGui.Size = UDim2.new(0.9, 0, 0, 104)
+            inviteGui.BackgroundColor3 = Color3.fromRGB(18, 20, 27)
+            inviteGui.BorderSizePixel = 0
+            inviteGui.Visible = false
+            inviteGui.ZIndex = 50000
+            inviteGui.Parent = ScreenGui
+            Instance.new("UICorner", inviteGui).CornerRadius = UDim.new(0, 12)
+            local inviteStroke = Instance.new("UIStroke", inviteGui)
+            inviteStroke.Color = THEME; inviteStroke.Thickness = 2
+            local inviteLabel = Instance.new("TextLabel")
+            inviteLabel.BackgroundTransparency = 1; inviteLabel.Position = UDim2.new(0, 10, 0, 8)
+            inviteLabel.Size = UDim2.new(1, -20, 0, 45); inviteLabel.Font = Enum.Font.GothamBold
+            inviteLabel.TextSize = 14; inviteLabel.TextWrapped = true; inviteLabel.TextColor3 = Color3.new(1,1,1)
+            inviteLabel.ZIndex = 50001; inviteLabel.Parent = inviteGui
+            local function inviteButton(txt, color, x, callback)
+                local b = Instance.new("TextButton")
+                b.Position = UDim2.new(x, 0, 0.58, 0); b.Size = UDim2.new(0.2, 0, 0.3, 0)
+                b.BackgroundColor3 = color; b.BorderSizePixel = 0; b.Text = txt
+                b.TextColor3 = Color3.new(1,1,1); b.Font = Enum.Font.GothamBold; b.TextSize = 14
+                b.ZIndex = 50002; b.Parent = inviteGui; Instance.new("UICorner", b).CornerRadius = UDim.new(0,7)
+                b.Activated:Connect(callback); return b
+            end
+            local lastGlobalInvite = nil
+            local currentGlobalInvite = nil
+            inviteButton("إيه", Color3.fromRGB(45,130,85), 0.54, function()
+                if not currentGlobalInvite then return end
+                chessGlobalCall("PATCH", "invites/" .. tostring(game:GetService("Players").LocalPlayer.UserId), {status="accepted", acceptedAt=os.time()})
+                queuedChessInvite = {role="receiver", matchId=currentGlobalInvite.matchId,
+                    opponentName=currentGlobalInvite.fromName or "الخصم"}
+                inviteGui.Visible = false
+                inviteGui.Position = UDim2.new(0.5, 0, 0, -112)
+                if launch then launch() end
+            end)
+            inviteButton("لا", Color3.fromRGB(145,55,65), 0.77, function()
+                if currentGlobalInvite then
+                    chessGlobalCall("PATCH", "invites/" .. tostring(game:GetService("Players").LocalPlayer.UserId), {status="declined"})
+                end
+                currentGlobalInvite = nil; inviteGui.Visible = false
+                inviteGui.Position = UDim2.new(0.5, 0, 0, -112)
+            end)
+            task.spawn(function()
+                local lp = game:GetService("Players").LocalPlayer
+                local myKey = tostring(lp.UserId)
+                while ScreenGui and ScreenGui.Parent do
+                    -- متابعة الدعوات المرسلة من هذا الجهاز
+                    if pendingChallengeTarget and pendingMatchId then
+                        local sent = chessGlobalCall("GET", "invites/" .. pendingChallengeTarget, nil)
+                        if type(sent) == "table" and sent.status == "accepted" and sent.matchId == pendingMatchId then
+                            queuedChessInvite = {role="sender", matchId=pendingMatchId,
+                                opponentName=pendingOpponentName or "الخصم"}
+                            pendingChallengeTarget, pendingMatchId = nil, nil
+                            if launch then launch() end
+                        elseif type(sent) == "table" and sent.status == "declined" then
+                            pendingChallengeTarget, pendingMatchId = nil, nil
+                        end
+                    end
+                    local inv = chessGlobalCall("GET", "invites/" .. myKey, nil)
+                    if type(inv) == "table" and inv.status == "pending" and inv.id and inv.id ~= lastGlobalInvite then
+                        lastGlobalInvite = inv.id; currentGlobalInvite = inv
+                        inviteLabel.Text = tostring(inv.fromName or "لاعب") .. " أرسل لك دعوة، تبي تتحداه؟"
+                        inviteGui.Visible = true
+                        TweenService:Create(inviteGui, TweenInfo.new(0.35, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+                            {Position=UDim2.new(0.5,0,0,12)}):Play()
+                    end
+                    task.wait(2)
+                end
+            end)
+        end
+    end)()
+
+-- ❌⭕ لعبة XO (لانهائية): كل لاعب 3 قطع بس، والقطعة الرابعة تشيل أقدم قطعة له
+-- ضد الكمبيوتر (سهل/صعب) أو ضد لاعب مشغّل السكربت (نفس نظام دعوات الشطرنج)
 ;(function()
     local TweenService = game:GetService("TweenService")
     local HttpService = game:GetService("HttpService")
@@ -64,6 +1315,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
     local THEME = UI.TabColors[11] or Color3.fromRGB(80, 210, 120)
     local Z = 9100
     local ROOT = "https://skyv-1ce1a-default-rtdb.firebaseio.com/xo/"
+    local MAX_MARKS = 3
 
     local GOLD = Color3.fromRGB(255, 215, 100)
     local RED = Color3.fromRGB(255, 120, 120)
@@ -71,6 +1323,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
     local GRAY = Color3.fromRGB(170, 190, 215)
     local X_COLOR = Color3.fromRGB(255, 110, 110)
     local O_COLOR = Color3.fromRGB(110, 190, 255)
+    local CELL_BG = Color3.fromRGB(34, 40, 52)
 
     -- ==================== Firebase ====================
     local function xoCall(method, path, body)
@@ -89,31 +1342,45 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
         return good and data or nil, good
     end
 
-    -- ==================== منطق اللعبة ====================
+    -- ==================== منطق اللعبة (3 قطع لكل لاعب) ====================
+    -- الحالة: q = {X = {أرقام الخانات بترتيب الوضع}, O = {...}} — الأول بالقائمة هو الأقدم
     local LINES = {{1,2,3},{4,5,6},{7,8,9},{1,4,7},{2,5,8},{3,6,9},{1,5,9},{3,5,7}}
     local function other(m) return m == "X" and "O" or "X" end
-    local function toTable(s)
-        local t = {}
-        for i = 1, 9 do t[i] = s:sub(i, i) end
-        return t
+    local function buildBoard(q)
+        local b = {}
+        for i = 1, 9 do b[i] = "-" end
+        for _, c in ipairs(q.X) do b[c] = "X" end
+        for _, c in ipairs(q.O) do b[c] = "O" end
+        return b
     end
     local function winnerOf(b)
         for _, l in ipairs(LINES) do
             local a = b[l[1]]
             if a ~= "-" and a == b[l[2]] and a == b[l[3]] then return a, l end
         end
-        for i = 1, 9 do if b[i] == "-" then return nil end end
-        return "draw"
+        return nil
     end
-    local function minimax(b, turn, me)
+    local function applyMove(q, mark, cell)
+        local nq = {X = {table.unpack(q.X)}, O = {table.unpack(q.O)}}
+        if #nq[mark] >= MAX_MARKS then table.remove(nq[mark], 1) end
+        table.insert(nq[mark], cell)
+        return nq
+    end
+    local function encode(list) return table.concat(list) end
+    local function decode(s)
+        local t = {}
+        for ch in tostring(s or ""):gmatch("%d") do t[#t + 1] = tonumber(ch) end
+        return t
+    end
+    local function search(q, turn, me, depth)
+        local b = buildBoard(q)
         local w = winnerOf(b)
-        if w == me then return 1 elseif w == "draw" then return 0 elseif w then return -1 end
-        local best = (turn == me) and -2 or 2
+        if w then return (w == me) and (10 + depth) or -(10 + depth) end
+        if depth <= 0 then return 0 end
+        local best = (turn == me) and -math.huge or math.huge
         for i = 1, 9 do
             if b[i] == "-" then
-                b[i] = turn
-                local s = minimax(b, other(turn), me)
-                b[i] = "-"
+                local s = search(applyMove(q, turn, i), other(turn), me, depth - 1)
                 if turn == me then
                     if s > best then best = s end
                 elseif s < best then
@@ -123,16 +1390,16 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
         end
         return best
     end
-    local function pickCpu(b, mark, hard)
+    local function pickCpu(q, mark, hard)
+        local b = buildBoard(q)
         local empty = {}
         for i = 1, 9 do if b[i] == "-" then table.insert(empty, i) end end
         if #empty == 0 then return nil end
-        if not hard and math.random() < 0.55 then return empty[math.random(#empty)] end
-        local bestS, bestM = -2, {}
+        if not hard and math.random() < 0.5 then return empty[math.random(#empty)] end
+        local depth = hard and 4 or 0
+        local bestS, bestM = -math.huge, {}
         for _, i in ipairs(empty) do
-            b[i] = mark
-            local s = minimax(b, other(mark), mark)
-            b[i] = "-"
+            local s = search(applyMove(q, mark, i), other(mark), mark, depth)
             if s > bestS then bestS = s; bestM = {i}
             elseif s == bestS then table.insert(bestM, i) end
         end
@@ -159,7 +1426,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
     sTitle.Font = Enum.Font.Arcade; sTitle.TextSize = 18
     sTitle.TextColor3 = Color3.fromRGB(220, 255, 240)
     sTitle.TextXAlignment = Enum.TextXAlignment.Right
-    sTitle.Text = "XO إكس أو"
+    sTitle.Text = "XO إكس أو (لانهائية)"
     sTitle.ZIndex = 8; sTitle.Parent = section
 
     local sDesc = Instance.new("TextLabel")
@@ -169,7 +1436,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
     sDesc.Font = Enum.Font.Arcade; sDesc.TextSize = 12
     sDesc.TextColor3 = Color3.fromRGB(170, 220, 255)
     sDesc.TextXAlignment = Enum.TextXAlignment.Right
-    sDesc.Text = "العب ضد الكمبيوتر أو تحدَّ اللاعبين المتصلين"
+    sDesc.Text = "3 قطع بس لكل لاعب — العب ضد الكمبيوتر أو لاعب"
     sDesc.ZIndex = 8; sDesc.Parent = section
 
     local startBtn = Instance.new("TextButton")
@@ -189,7 +1456,6 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
     -- ==================== حالة مشتركة (الدعوات) ====================
     local activeClose, activeNotify
     local launch
-    local queuedMatch = nil
     local pendingTarget, pendingMatch, pendingName, pendingAt = nil, nil, nil, 0
 
     local function mk(class, props, parent)
@@ -200,7 +1466,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
     end
     local function mkBtn(parent, text, color, size, pos, cb)
         local b = mk("TextButton", {Text = text, BackgroundColor3 = color, BorderSizePixel = 0,
-            AutoButtonColor = true, Font = Enum.Font.GothamBold, TextSize = 15,
+            AutoButtonColor = true, Font = Enum.Font.GothamBold, TextSize = 15, TextWrapped = true,
             TextColor3 = Color3.new(1, 1, 1), Size = size, Position = pos, ZIndex = Z + 3}, parent)
         Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
         local st = Instance.new("UIStroke", b)
@@ -210,7 +1476,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
         return b
     end
 
-    -- ==================== الشاشة ====================
+    -- ==================== الشاشة (عريضة) ====================
     launch = function(session)
         if activeClose then activeClose() end
         local alive = true
@@ -220,17 +1486,29 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
             BackgroundColor3 = Color3.fromRGB(16, 19, 24), BorderSizePixel = 0,
             Active = true, ZIndex = Z}, ScreenGui)
         local card = mk("Frame", {AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.new(0.5, 0, 0.5, 0),
-            Size = UDim2.new(0, 320, 0, 440), BackgroundColor3 = Color3.fromRGB(24, 28, 36),
+            Size = UDim2.new(0, 560, 0, 300), BackgroundColor3 = Color3.fromRGB(24, 28, 36),
             BorderSizePixel = 0, ZIndex = Z + 1}, overlay)
         Instance.new("UICorner", card).CornerRadius = UDim.new(0, 12)
         local cStroke = Instance.new("UIStroke", card)
         cStroke.Color = THEME; cStroke.Thickness = 1.5; cStroke.Transparency = 0.3
 
-        mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 40), Position = UDim2.new(0, 0, 0, 6),
-            Font = Enum.Font.GothamBold, TextSize = 24, TextColor3 = Color3.fromRGB(220, 255, 240),
+        -- يصغّر البطاقة تلقائياً لو الشاشة ضيقة
+        local scale = Instance.new("UIScale", card)
+        local cam = workspace.CurrentCamera
+        local function fit()
+            local c = workspace.CurrentCamera or cam
+            if not c then return end
+            local vp = c.ViewportSize
+            scale.Scale = math.clamp(math.min(vp.X / 600, vp.Y / 330), 0.4, 1)
+        end
+        fit()
+        local vpConn = cam and cam:GetPropertyChangedSignal("ViewportSize"):Connect(fit)
+
+        mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 34), Position = UDim2.new(0, 0, 0, 6),
+            Font = Enum.Font.GothamBold, TextSize = 22, TextColor3 = Color3.fromRGB(220, 255, 240),
             Text = "XO  إكس أو", ZIndex = Z + 3}, card)
-        local status = mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 30),
-            Position = UDim2.new(0, 10, 0, 46), Font = Enum.Font.GothamBold, TextSize = 14,
+        local status = mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -20, 0, 26),
+            Position = UDim2.new(0, 10, 0, 40), Font = Enum.Font.GothamBold, TextSize = 14,
             TextWrapped = true, TextColor3 = GRAY, Text = "", ZIndex = Z + 3}, card)
 
         local function setStatus(t, c)
@@ -240,8 +1518,8 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
         activeNotify = setStatus
 
         local function newView()
-            return mk("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -84),
-                Position = UDim2.new(0, 0, 0, 84), Visible = false, ZIndex = Z + 2}, card)
+            return mk("Frame", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 1, -72),
+                Position = UDim2.new(0, 0, 0, 72), Visible = false, ZIndex = Z + 2}, card)
         end
         local menuView, playersView, boardView = newView(), newView(), newView()
         local function showView(v)
@@ -251,27 +1529,35 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
         end
 
         -- ---------- حالة المباراة ----------
-        local board = toTable("---------")
+        local q = {X = {}, O = {}}
+        local board = buildBoard(q)
         local myMark, turn, over = "X", "X", false
         local mode, hard, online = "cpu", false, nil
         local cells, localSeq, result = {}, 0, nil
-        local replayBtn
+        local replayBtn, infoLabel
 
         local function render()
             for i = 1, 9 do
                 local m = board[i]
                 cells[i].Text = (m == "-") and "" or m
                 cells[i].TextColor3 = (m == "X") and X_COLOR or O_COLOR
+                cells[i].TextTransparency = 0
+            end
+            -- القطعة الأقدم للاعب اللي دوره تصير باهتة (هي اللي بتختفي)
+            if not over then
+                local list = q[turn]
+                if #list >= MAX_MARKS then cells[list[1]].TextTransparency = 0.65 end
             end
         end
         local function oppName()
             return (online and online.oppName) or "الخصم"
         end
         local function updateStatus()
+            local mine = (turn == myMark)
             if mode == "cpu" then
-                setStatus(turn == myMark and ("دورك (" .. myMark .. ")") or "دور الكمبيوتر...", turn == myMark and GREEN or GRAY)
+                setStatus(mine and ("دورك (" .. myMark .. ")") or "دور الكمبيوتر...", mine and GREEN or GRAY)
             else
-                setStatus(turn == myMark and ("دورك (" .. myMark .. ")") or ("دور " .. oppName() .. "..."), turn == myMark and GREEN or GRAY)
+                setStatus(mine and ("دورك (" .. myMark .. ")") or ("دور " .. oppName() .. "..."), mine and GREEN or GRAY)
             end
         end
         local function finish(w, line)
@@ -279,9 +1565,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
             if line then
                 for _, i in ipairs(line) do cells[i].BackgroundColor3 = Color3.fromRGB(55, 110, 70) end
             end
-            if w == "draw" then
-                setStatus("تعادل 🤝", GOLD)
-            elseif w == myMark then
+            if w == myMark then
                 setStatus("فزت 🎉", GREEN)
             else
                 setStatus((mode == "cpu" and "فاز الكمبيوتر" or ("فاز " .. oppName())) .. " 😅", RED)
@@ -289,23 +1573,30 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
             if replayBtn then replayBtn.Visible = (mode == "cpu") end
         end
         local function place(i, mark)
-            board[i] = mark
+            q = applyMove(q, mark, i)
+            board = buildBoard(q)
             local w, line = winnerOf(board)
-            if w then finish(w, line) else turn = other(mark); updateStatus() end
+            if w then
+                finish(w, line)
+            else
+                turn = other(mark)
+                updateStatus()
+            end
             render()
         end
         local function cpuTurn()
             local myRun = runId
             task.spawn(function()
-                task.wait(0.5)
+                task.wait(0.6)
                 if not alive or over or myRun ~= runId then return end
-                local m = pickCpu(board, other(myMark), hard)
+                local m = pickCpu(q, other(myMark), hard)
                 if m then place(m, other(myMark)) end
             end)
         end
         local function pushMove()
             localSeq = localSeq + 1
-            local data = {board = table.concat(board), turn = turn, seq = localSeq, winner = over and result or ""}
+            local data = {xq = encode(q.X), oq = encode(q.O), turn = turn, seq = localSeq,
+                winner = over and result or ""}
             local id = online.matchId
             task.spawn(function() xoCall("PATCH", "matches/" .. id, data) end)
         end
@@ -319,17 +1610,23 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
             end
         end
 
-        -- ---------- لوحة اللعب ----------
+        -- ---------- لوحة اللعب (يسار) ----------
         for i = 1, 9 do
             local r, c = math.floor((i - 1) / 3), (i - 1) % 3
-            local cell = mk("TextButton", {Size = UDim2.new(0, 90, 0, 90),
-                Position = UDim2.new(0, 17 + c * 98, 0, 10 + r * 98),
-                BackgroundColor3 = Color3.fromRGB(34, 40, 52), BorderSizePixel = 0, AutoButtonColor = false,
-                Font = Enum.Font.GothamBold, TextSize = 50, Text = "", ZIndex = Z + 3}, boardView)
+            local cell = mk("TextButton", {Size = UDim2.new(0, 64, 0, 64),
+                Position = UDim2.new(0, 26 + c * 70, 0, 8 + r * 70),
+                BackgroundColor3 = CELL_BG, BorderSizePixel = 0, AutoButtonColor = false,
+                Font = Enum.Font.GothamBold, TextSize = 38, Text = "", ZIndex = Z + 3}, boardView)
             Instance.new("UICorner", cell).CornerRadius = UDim.new(0, 10)
             cell.Activated:Connect(function() onCell(i) end)
             cells[i] = cell
         end
+
+        -- ---------- المعلومات والأزرار (يمين) ----------
+        infoLabel = mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(0, 270, 0, 100),
+            Position = UDim2.new(0, 260, 0, 8), Font = Enum.Font.GothamBold, TextSize = 14, TextWrapped = true,
+            TextXAlignment = Enum.TextXAlignment.Center, TextYAlignment = Enum.TextYAlignment.Top,
+            TextColor3 = GRAY, Text = "", ZIndex = Z + 3}, boardView)
 
         local function leaveMatch()
             runId = runId + 1
@@ -341,11 +1638,14 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
         end
 
         local function resetBoard()
-            board = toTable("---------")
+            q = {X = {}, O = {}}
+            board = buildBoard(q)
             turn, over, result, localSeq = "X", false, nil, 0
-            for i = 1, 9 do cells[i].BackgroundColor3 = Color3.fromRGB(34, 40, 52) end
+            for i = 1, 9 do cells[i].BackgroundColor3 = CELL_BG end
             render()
         end
+
+        local RULE = "\nكل لاعب عنده 3 قطع بس.\nالقطعة الرابعة تشيل أقدم قطعة لك (الباهتة)."
 
         local function startCpu(isHard)
             leaveMatch()
@@ -353,6 +1653,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
             resetBoard()
             showView(boardView)
             replayBtn.Visible = false
+            infoLabel.Text = "أنت تلعب: " .. myMark .. RULE
             updateStatus()
         end
 
@@ -365,6 +1666,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
             resetBoard()
             showView(boardView)
             replayBtn.Visible = false
+            infoLabel.Text = "أنت تلعب: " .. myMark .. "  ضد " .. oppName() .. RULE
             updateStatus()
             task.spawn(function()
                 while alive and myRun == runId do
@@ -375,15 +1677,17 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
                         if m.left and tostring(m.left) ~= myId and not over then
                             over = true
                             setStatus(oppName() .. " انسحب 🏳️", GOLD)
+                            render()
                         end
                         local seq = tonumber(m.seq)
-                        if seq and seq > localSeq and type(m.board) == "string" and #m.board == 9 then
+                        if seq and seq > localSeq then
                             localSeq = seq
-                            board = toTable(m.board)
+                            q = {X = decode(m.xq), O = decode(m.oq)}
+                            board = buildBoard(q)
                             turn = (m.turn == "X" or m.turn == "O") and m.turn or turn
-                            render()
                             local w, line = winnerOf(board)
                             if w then finish(w, line) else updateStatus() end
+                            render()
                         end
                     end
                 end
@@ -391,30 +1695,31 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
         end
 
         replayBtn = mkBtn(boardView, "🔁 إعادة", Color3.fromRGB(45, 130, 85),
-            UDim2.new(0, 135, 0, 36), UDim2.new(0, 17, 0, 316), function()
+            UDim2.new(0, 125, 0, 40), UDim2.new(0, 270, 0, 140), function()
                 if mode == "cpu" then startCpu(hard) end
             end)
         replayBtn.Visible = false
         mkBtn(boardView, "القائمة", Color3.fromRGB(60, 80, 110),
-            UDim2.new(0, 135, 0, 36), UDim2.new(0, 168, 0, 316), function()
+            UDim2.new(0, 125, 0, 40), UDim2.new(0, 405, 0, 140), function()
                 leaveMatch()
                 setStatus("", GRAY)
                 showView(menuView)
             end)
 
-        -- ---------- القائمة ----------
+        -- ---------- القائمة (أزرار بصف) ----------
         mkBtn(menuView, "🤖 ضد الكمبيوتر (سهل)", Color3.fromRGB(60, 150, 85),
-            UDim2.new(0, 260, 0, 46), UDim2.new(0, 30, 0, 20), function() startCpu(false) end)
+            UDim2.new(0, 165, 0, 60), UDim2.new(0, 22, 0, 24), function() startCpu(false) end)
         mkBtn(menuView, "🤖 ضد الكمبيوتر (صعب)", Color3.fromRGB(180, 65, 65),
-            UDim2.new(0, 260, 0, 46), UDim2.new(0, 30, 0, 80), function() startCpu(true) end)
+            UDim2.new(0, 165, 0, 60), UDim2.new(0, 197, 0, 24), function() startCpu(true) end)
         local playersBtn = mkBtn(menuView, "👥 العب ضد لاعب", Color3.fromRGB(60, 105, 170),
-            UDim2.new(0, 260, 0, 46), UDim2.new(0, 30, 0, 140), function() end)
-        mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -30, 0, 60), Position = UDim2.new(0, 15, 0, 205),
-            Font = Enum.Font.Gotham, TextSize = 13, TextWrapped = true, TextColor3 = GRAY,
-            Text = "اللعب ضد لاعب: اختر أحد المتصلين (مشغّلين السكربت) وأرسل له دعوة.", ZIndex = Z + 3}, menuView)
+            UDim2.new(0, 165, 0, 60), UDim2.new(0, 372, 0, 24), function() end)
+        mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, -40, 0, 90), Position = UDim2.new(0, 20, 0, 104),
+            Font = Enum.Font.Gotham, TextSize = 14, TextWrapped = true, TextColor3 = GRAY,
+            Text = "لعبة لانهائية: كل لاعب عنده 3 قطع بس، وإذا حطيت قطعة رابعة تختفي أقدم قطعة لك وتنحط الجديدة مكانها.\nاللعب ضد لاعب: اختر أحد المتصلين (مشغّلين السكربت) وأرسل له دعوة.",
+            ZIndex = Z + 3}, menuView)
 
         -- ---------- قائمة اللاعبين ----------
-        local scroll = mk("ScrollingFrame", {Size = UDim2.new(1, -20, 1, -56), Position = UDim2.new(0, 10, 0, 0),
+        local scroll = mk("ScrollingFrame", {Size = UDim2.new(1, -40, 1, -56), Position = UDim2.new(0, 20, 0, 0),
             BackgroundTransparency = 1, BorderSizePixel = 0, ScrollBarThickness = 4,
             CanvasSize = UDim2.new(0, 0, 0, 0), Active = true, ZIndex = Z + 3}, playersView)
         local layout = Instance.new("UIListLayout", scroll)
@@ -426,7 +1731,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
 
         local function sendInvite(uid, name)
             local matchId = HttpService:GenerateGUID(false)
-            local _, ok1 = xoCall("PUT", "matches/" .. matchId, {board = "---------", turn = "X", seq = 0, createdAt = os.time()})
+            local _, ok1 = xoCall("PUT", "matches/" .. matchId, {xq = "", oq = "", turn = "X", seq = 0, createdAt = os.time()})
             local _, ok2 = xoCall("PUT", "invites/" .. tostring(uid), {id = HttpService:GenerateGUID(false),
                 matchId = matchId, fromId = myId, fromName = myDisplay, status = "pending", createdAt = os.time()})
             if not (ok1 and ok2) then
@@ -449,24 +1754,24 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
                     if tostring(uid) ~= myId and type(e) == "table" and tonumber(e.updatedAt) and now - tonumber(e.updatedAt) <= 45 then
                         count = count + 1
                         local name = tostring(e.displayName or e.name or "لاعب")
-                        local row = mk("Frame", {Size = UDim2.new(1, -4, 0, 48), BackgroundColor3 = Color3.fromRGB(34, 40, 52),
+                        local row = mk("Frame", {Size = UDim2.new(1, -4, 0, 44), BackgroundColor3 = CELL_BG,
                             BorderSizePixel = 0, ZIndex = Z + 4}, scroll)
                         Instance.new("UICorner", row).CornerRadius = UDim.new(0, 8)
-                        mk("TextLabel", {BackgroundTransparency = 1, Position = UDim2.new(0, 8, 0, 0), Size = UDim2.new(0.55, 0, 1, 0),
-                            Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = Color3.new(1, 1, 1),
+                        mk("TextLabel", {BackgroundTransparency = 1, Position = UDim2.new(0, 10, 0, 0), Size = UDim2.new(0.6, 0, 1, 0),
+                            Font = Enum.Font.GothamBold, TextSize = 14, TextColor3 = Color3.new(1, 1, 1),
                             TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd,
                             Text = name, ZIndex = Z + 5}, row)
                         local b = mkBtn(row, "تحدّي", Color3.fromRGB(60, 105, 170),
-                            UDim2.new(0.34, 0, 0.7, 0), UDim2.new(0.62, 0, 0.15, 0), function() sendInvite(uid, name) end)
+                            UDim2.new(0.28, 0, 0.7, 0), UDim2.new(0.68, 0, 0.15, 0), function() sendInvite(uid, name) end)
                         b.ZIndex = Z + 6
                     end
                 end
             end
             if count == 0 then
-                mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 55), Font = Enum.Font.Gotham,
+                mk("TextLabel", {BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 50), Font = Enum.Font.Gotham,
                     Text = "ما فيه أحد متصل", TextColor3 = GRAY, TextSize = 14, ZIndex = Z + 4}, scroll)
             end
-            scroll.CanvasSize = UDim2.new(0, 0, 0, math.max(60, count * 55))
+            scroll.CanvasSize = UDim2.new(0, 0, 0, math.max(55, count * 51))
         end
         playersBtn.Activated:Connect(function()
             showView(playersView)
@@ -484,6 +1789,7 @@ local ResetConfig, SaveConfig, LoadConfig, ApplyTabColor, RefreshTabPickerHighli
             if not alive then return end
             leaveMatch()
             alive = false
+            if vpConn then vpConn:Disconnect() end
             if activeNotify == setStatus then activeNotify = nil end
             overlay:Destroy()
             if activeClose == cleanup then activeClose = nil end
@@ -4218,7 +5524,6 @@ end)()
         end)
         return ok
     end
-    __S.set("SaveConfig", SaveConfig)
 
     -- يستعمله نظام إعادة المواضع الموجود خارج RunMyOriginalScript.
     _G.SkySaveConfig = function()
@@ -4260,7 +5565,6 @@ end)()
         _configLoading = false
         return true
     end
-    __S.set("LoadConfig", LoadConfig)
 
     ResetConfig = function()
         _configLoading = true
@@ -4310,7 +5614,6 @@ end)()
         _configLoading = false
         OK("🗑️ تم حذف الحفظ وإعادة كل الإعدادات للأصل")
     end
-    __S.set("ResetConfig", ResetConfig)
 
     -- ====================== 🗺️ سؤال إعدادات الماب (أول مرة بس لكل ماب) ======================
     UI._MapSaveEnabled = false -- ما ينحفظ شي إلا إذا المستخدم وافق على الحفظ لهذا الماب
@@ -11171,7 +12474,6 @@ end
         SetGlowColor(UI.ActionBtnGlowGrad, color)
         if UI.ResetConfigBtnGlowGrad then SetGlowColor(UI.ResetConfigBtnGlowGrad, color) end
     end
-    __S.set("ApplyTabColor", ApplyTabColor)
 
     local TabPickerList = {
         {idx = 1, name = "✈️ المميزات"},
@@ -11264,7 +12566,6 @@ end
             SetGlowColor(entry.glow, col)
         end
     end
-    __S.set("RefreshTabPickerHighlight", RefreshTabPickerHighlight)
 
     for _, item in ipairs(TabPickerList) do
         local card = Instance.new("Frame", TabPickerFrame)
@@ -18759,3 +20060,1309 @@ end))
     end)
 
     OK("🔮 SKY V17.1 جاهز وملء الشاشة بالكامل!")
+end
+
+-- 🧾 لو صار خطأ داخل السكربت، يطلع نص الخطأ على الشاشة
+local okRunScript, errRunScript = xpcall(RunMyOriginalScript, function(e)
+    return debug.traceback(tostring(e), 2)
+end)
+if not okRunScript then
+    warn("SKY ERROR: " .. tostring(errRunScript))
+    pcall(function()
+        game:GetService("StarterGui"):SetCore("SendNotification", {
+            Title = "SKY خطأ",
+            Text = string.sub(tostring(errRunScript), 1, 180),
+            Duration = 30
+        })
+    end)
+end
+
+local RunService = game:GetService("RunService")
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+-- وضع الأداء اليدوي فقط؛ لا توجد مراقبة أو تنبيهات تلقائية لتغيّر FPS.
+local SkyPerformanceMode = false
+local SkySavedGradients = {}
+local SkySavedEffects = {}
+local function SkyEnablePerformanceMode()
+    if SkyPerformanceMode then return end
+    SkyPerformanceMode = true
+    -- حفظ مؤثرات الـGlow ثم فصلها مؤقتًا حتى يمكن إعادتها لاحقًا.
+    for _, item in ipairs(game.CoreGui:GetDescendants()) do
+        if item:IsA("UIGradient") then
+            table.insert(SkySavedGradients, {item = item, parent = item.Parent})
+            item.Parent = nil
+        end
+    end
+    -- إيقاف المؤثرات البصرية الثقيلة الموجودة في واجهات السكربت فقط.
+    for _, item in ipairs(game.CoreGui:GetDescendants()) do
+        if item:IsA("ParticleEmitter") or item:IsA("Trail") or item:IsA("Beam") then
+            table.insert(SkySavedEffects, {item = item, enabled = item.Enabled})
+            item.Enabled = false
+        end
+    end
+end
+
+local function SkyRestorePerformanceMode()
+    if not SkyPerformanceMode then return end
+    for _, data in ipairs(SkySavedGradients) do
+        if data.item and data.parent and data.parent.Parent then
+            data.item.Parent = data.parent
+        end
+    end
+    for _, data in ipairs(SkySavedEffects) do
+        if data.item and data.item.Parent then
+            data.item.Enabled = data.enabled
+        end
+    end
+    SkySavedGradients = {}
+    SkySavedEffects = {}
+    SkyPerformanceMode = false
+end
+
+_G.SkyEnablePerformanceMode = SkyEnablePerformanceMode
+_G.SkyRestorePerformanceMode = SkyRestorePerformanceMode
+
+local function SkyShowFullscreenLoading(message, onDone, loadingTitle, loadingMode)
+    -- نفس شاشة التحميل الأساسية عند تشغيل Sky: شاشة سوداء كاملة + نفس الخط/الشريط.
+    -- لا توجد أي قائمة أو صندوق فوقها أثناء التحميل.
+    local loadingGui = Instance.new("ScreenGui")
+    loadingGui.Name = "SkyFullscreenPerformanceLoading"
+    loadingGui.IgnoreGuiInset = true
+    loadingGui.ResetOnSpawn = false
+    loadingGui.DisplayOrder = 1000001
+    loadingGui.Parent = game.CoreGui
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 1, 0)
+    bg.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+    bg.BackgroundTransparency = 1
+    bg.BorderSizePixel = 0
+    bg.Parent = loadingGui
+
+    local title = Instance.new("TextLabel")
+    title.Size = UDim2.new(1, 0, 0, 42)
+    title.Position = UDim2.new(0, 0, 0.42, 0)
+    title.BackgroundTransparency = 1
+    title.Text = loadingTitle or "S    K    Y"
+    title.TextColor3 = Color3.fromRGB(190, 50, 255)
+    title.TextTransparency = 1
+    title.Font = Enum.Font.Arcade
+    title.TextSize = 25
+    title.Parent = bg
+
+    local status = Instance.new("TextLabel")
+    status.Size = UDim2.new(1, 0, 0, 24)
+    status.Position = UDim2.new(0, 0, 0.51, 0)
+    status.BackgroundTransparency = 1
+    status.Text = message or "تهيئة السكربت..."
+    status.TextColor3 = Color3.fromRGB(210, 210, 210)
+    status.TextTransparency = 1
+    status.Font = Enum.Font.Arcade
+    status.TextSize = 13
+    status.Parent = bg
+
+    local credits = Instance.new("TextLabel")
+    credits.Size = UDim2.new(1, -40, 0, 42)
+    credits.AnchorPoint = Vector2.new(0.5, 0)
+    credits.Position = UDim2.new(0.5, 0, 0.66, 0)
+    credits.BackgroundTransparency = 1
+    credits.Text = "المطور  : AAbbooyi"
+    credits.TextColor3 = Color3.fromRGB(230, 210, 255)
+    credits.TextTransparency = 1
+    credits.Font = Enum.Font.Arcade
+    credits.TextSize = 14
+    credits.TextWrapped = true
+    credits.Parent = bg
+
+    local back = Instance.new("Frame")
+    back.Size = UDim2.new(0, 260, 0, 6)
+    back.AnchorPoint = Vector2.new(0.5, 0.5)
+    back.Position = UDim2.new(0.5, 0, 0.60, 0)
+    back.BackgroundColor3 = Color3.fromRGB(35, 35, 42)
+    back.BackgroundTransparency = 1
+    back.BorderSizePixel = 0
+    back.Parent = bg
+    Instance.new("UICorner", back).CornerRadius = UDim.new(1, 0)
+
+    local bar = Instance.new("Frame")
+    bar.Size = UDim2.new(0, 0, 1, 0)
+    bar.BackgroundColor3 = Color3.fromRGB(170, 0, 255)
+    bar.BackgroundTransparency = 1
+    bar.BorderSizePixel = 0
+    bar.Parent = back
+    Instance.new("UICorner", bar).CornerRadius = UDim.new(1, 0)
+
+    SkyTw(bg, TweenInfo.new(0.7, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
+    task.wait(0.35)
+    SkyTw(title, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+    task.wait(0.25)
+    SkyTw(status, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+    SkyTw(credits, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {TextTransparency = 0}):Play()
+    SkyTw(back, TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
+    task.wait(0.2)
+    SkyTw(bar, TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundTransparency = 0}):Play()
+    task.wait(0.35)
+
+    local steps
+    if loadingMode == "restore" then
+        -- شاشة استرجاع الوضع الطبيعي: إعادة كل الأنميشن والأشياء التي تم تعطيلها.
+        title.Text = loadingTitle or "يتم تحميل كل الأنميشن"
+        status.Text = message or "يتم تحميل كل الأنميشن والأشياء الأخرى..."
+        steps = {
+            {0.12, 0.60, "يتم تحميل كل الأنميشن...", 0.30},
+            {0.28, 0.65, "يتم تحميل الأشياء والمؤثرات الأخرى...", 0.30},
+            {0.46, 0.70, "يتم إعادة الأنميشن التي تم تعطيلها...", 0.35},
+            {0.64, 0.70, "يتم إعادة المؤثرات والإعدادات الطبيعية...", 0.35},
+            {0.82, 0.65, "يتم تجهيز كل الأشياء للعمل بشكل طبيعي...", 0.35},
+            {0.94, 0.55, "اللمسات الأخيرة...", 0.30},
+            {1, 0.50, "تم تحميل كل الأنميشن والأشياء الأخرى", 0.45},
+        }
+    else
+        -- شاشة انخفاض FPS: حذف/تعطيل الأنميشن التي تستهلك FPS والأشياء الثقيلة.
+        title.Text = loadingTitle or "يتم حذف الأنميشن التي تخفف الـ FPS"
+        status.Text = message or "يتم حذف الأنميشن التي تخفف الـ FPS..."
+        steps = {
+            {0.12, 0.60, "يتم فحص الأنميشن التي تخفف الـ FPS...", 0.30},
+            {0.28, 0.65, "يتم تجهيز الأنميشن التي سيتم تعطيلها...", 0.30},
+            {0.46, 0.70, "يتم حذف الأنميشن التي تخفف الـ FPS...", 0.35},
+            {0.64, 0.70, "يتم تعطيل الأشياء الثقيلة...", 0.35},
+            {0.82, 0.65, "يتم تحسين إعدادات الأداء...", 0.35},
+            {0.94, 0.55, "اللمسات الأخيرة...", 0.30},
+            {1, 0.50, "تم حذف الأنميشن وتحسين الأداء", 0.45},
+        }
+    end
+
+    for _, stepData in ipairs(steps) do
+        status.Text = stepData[3]
+        SkyTw(bar, TweenInfo.new(stepData[2], Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+            Size = UDim2.new(stepData[1], 0, 1, 0)
+        }):Play()
+        task.wait(stepData[2] + stepData[4])
+    end
+
+    if onDone then
+        onDone()
+    end
+
+    SkyTw(bg, TweenInfo.new(0.45), {BackgroundTransparency = 1}):Play()
+    SkyTw(title, TweenInfo.new(0.35), {TextTransparency = 1}):Play()
+    SkyTw(status, TweenInfo.new(0.35), {TextTransparency = 1}):Play()
+    SkyTw(credits, TweenInfo.new(0.35), {TextTransparency = 1}):Play()
+    SkyTw(back, TweenInfo.new(0.35), {BackgroundTransparency = 1}):Play()
+    SkyTw(bar, TweenInfo.new(0.35), {BackgroundTransparency = 1}):Play()
+    task.wait(0.5)
+    if loadingGui then loadingGui:Destroy() end
+end
+
+-- 💾 تصريح مسبق: تُملأ لاحقًا بدالة حفظ مكان زر R وزر القفل، وتُستدعى عند نهاية السحب
+local SaveExtraButtonPositions
+
+-- 1. معرفات الأيقونات (IDs)
+local LOCKED_ICON = "rbxassetid://6034818372"
+local UNLOCKED_ICON = "rbxassetid://6034818379"
+
+-- 2. إنشاء الـ GUI والزر
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "LockSystemGui"
+screenGui.Parent = player:WaitForChild("PlayerGui")
+screenGui.ResetOnSpawn = false -- القائمة لا تختفي عند الموت
+
+local button = Instance.new("ImageButton", screenGui)
+button.Size = UDim2.new(0, 45, 0, 45) 
+-- 🔄 زر صغير باسم R لإعادة إحياء الشخصية مباشرة
+local respawnButton = Instance.new("TextButton", screenGui)
+respawnButton.Name = "RespawnButton"
+respawnButton.Size = UDim2.new(0, 54, 0, 54)
+respawnButton.Position = UDim2.new(0.5, -27, 0.5, -27) -- منتصف الشاشة
+respawnButton.BackgroundColor3 = Color3.fromRGB(18, 18, 22)
+respawnButton.BackgroundTransparency = 0.05
+respawnButton.Text = "R"
+respawnButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+respawnButton.TextStrokeColor3 = Color3.fromRGB(170, 0, 255)
+respawnButton.TextStrokeTransparency = 0.35
+respawnButton.TextSize = 26
+respawnButton.Font = Enum.Font.Arcade
+respawnButton.AutoButtonColor = true
+respawnButton.Modal = false
+respawnButton.ZIndex = 100 -- يظهر فوق عناصر التحرك
+Instance.new("UICorner", respawnButton).CornerRadius = UDim.new(0, 12) -- مربع بحواف دائرية
+local respawnStroke = Instance.new("UIStroke", respawnButton)
+respawnStroke.Thickness = 3
+respawnStroke.Color = Color3.fromRGB(8, 8, 10)
+respawnStroke.Transparency = 0
+local respawnGradient = Instance.new("UIGradient", respawnStroke)
+respawnGradient.Color = ColorSequence.new({
+	ColorSequenceKeypoint.new(0, Color3.fromRGB(8, 8, 10)),
+	ColorSequenceKeypoint.new(0.28, Color3.fromRGB(170, 0, 255)),
+	ColorSequenceKeypoint.new(0.5, Color3.fromRGB(8, 8, 10)),
+	ColorSequenceKeypoint.new(0.72, Color3.fromRGB(170, 0, 255)),
+	ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 8, 10)),
+})
+task.spawn(function()
+	while respawnButton and respawnButton.Parent do
+		if not _G.SkyGlowOff then respawnGradient.Rotation = (respawnGradient.Rotation + 3) % 360 end
+		task.wait(0.03)
+	end
+end)
+
+local function fastRespawn()
+	local character = player.Character
+	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+		if humanoid then
+			-- تصفير الصحة وكسر المفاصل معًا لتفعيل الموت والريسبون بأسرع وقت
+			humanoid.Health = 0
+			character:BreakJoints()
+		elseif character then
+			character:BreakJoints()
+		else
+			local ok, err = pcall(function() player:LoadCharacter() end)
+			if not ok then warn("[R Respawn] تعذر إعادة إحياء الشخصية: " .. tostring(err)) end
+		end
+end
+
+local function showTouchRespawnTip()
+	FlyTipNotify("اضغط زر R لإعادة إحياء الشخصية", false, nil, 4.0, 1.0)
+end
+
+respawnButton.Active = true
+
+-- 🖐️ تحريك زر R باللمس أو الماوس
+local rDragging, rDragInput, rDragStart, rStartPos = false, nil, nil, nil
+local rMoved = false
+local _respawnClickTimes = {}
+local TRIPLE_CLICK_WINDOW = 0.6
+
+local function updateRespawnButton(input)
+	local delta = input.Position - rDragStart
+	if delta.Magnitude > 8 then rMoved = true end
+	respawnButton.Position = UDim2.new(
+		rStartPos.X.Scale, rStartPos.X.Offset + delta.X,
+		rStartPos.Y.Scale, rStartPos.Y.Offset + delta.Y
+	)
+end
+
+respawnButton.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		rDragging = true
+		rMoved = false
+		rDragStart = input.Position
+		rStartPos = respawnButton.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				rDragging = false
+			end
+		end)
+	end
+end)
+
+respawnButton.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		rDragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == rDragInput and rDragging then
+		updateRespawnButton(input)
+	end
+end)
+
+respawnButton.MouseButton1Click:Connect(function()
+	if rMoved then
+		rMoved = false
+		return
+	end
+
+	-- 🔄 3 ضغطات سريعة على زر R = إرجاع كل القوائم لمكانها الأصلي.
+	local now = tick()
+	table.insert(_respawnClickTimes, now)
+	while #_respawnClickTimes > 0 and (now - _respawnClickTimes[1]) > TRIPLE_CLICK_WINDOW do
+		table.remove(_respawnClickTimes, 1)
+	end
+
+	if #_respawnClickTimes >= 3 then
+		_respawnClickTimes = {}
+		if _G.SkyResetMenuPositions then
+			pcall(_G.SkyResetMenuPositions)
+			if FlyTipNotify then
+				pcall(function()
+					FlyTipNotify("🔄 تم إرجاع كل القوائم لمكانها الأصلي", false, nil, 4.0, 1.0)
+				end)
+			end
+		end
+		return
+	end
+
+	fastRespawn()
+end)
+button.AnchorPoint = Vector2.new(1, 1)
+button.Position = UDim2.new(1, -100, 1, -110) -- 📍 موقع ثابت قريب من زر النط حق روبلوكس، أعلى ويسار شوي
+button.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+button.Image = LOCKED_ICON
+button.ImageTransparency = 0.2
+button.ZIndex = 5
+_G.SkyLockButton = button
+button.Visible = not _G.SkyHideLockButton
+button.Active = true -- لجعل الزر قابلاً للتفاعل (بدون سحب)
+
+-- إضافة زوايا مستديرة وإطار
+Instance.new("UICorner", button).CornerRadius = UDim.new(1, 0)
+local uiStroke = Instance.new("UIStroke", button)
+uiStroke.Thickness = 2
+uiStroke.Color = Color3.fromRGB(255, 255, 255)
+uiStroke.Transparency = 0.5
+
+-- 🔒 تحريك محدود لزر القفل: يقدر يتحرك شوي لكن ما يقدر يطلع من صندوق ثابت حواليه
+-- (كذا حتى لو تحرك يفضل قريب من مكانه المعروف وما يضيع)
+local lockBaseOffsetX, lockBaseOffsetY = -100, -110 -- نفس قيم موضع الزر الثابت فوق
+local LOCK_BOX_RADIUS = 90 -- حجم الهدبوكس حول الزر (بالبكسل) -- كبير شوي عشان يعطي مجال حركة مريح
+
+local function clampLockButtonPosition(pos)
+	local minX, maxX = lockBaseOffsetX - LOCK_BOX_RADIUS, lockBaseOffsetX + LOCK_BOX_RADIUS
+	local minY, maxY = lockBaseOffsetY - LOCK_BOX_RADIUS, lockBaseOffsetY + LOCK_BOX_RADIUS
+	local x = math.clamp(pos.X.Offset, minX, maxX)
+	local y = math.clamp(pos.Y.Offset, minY, maxY)
+	return UDim2.new(pos.X.Scale, x, pos.Y.Scale, y)
+end
+
+local lockDragging, lockDragInput, lockDragStart, lockStartPos = false, nil, nil, nil
+local lockMoved = false
+
+local function updateLockButton(input)
+	local delta = input.Position - lockDragStart
+	if delta.Magnitude > 8 then lockMoved = true end
+	local newPos = UDim2.new(
+		lockStartPos.X.Scale, lockStartPos.X.Offset + delta.X,
+		lockStartPos.Y.Scale, lockStartPos.Y.Offset + delta.Y
+	)
+	button.Position = clampLockButtonPosition(newPos)
+end
+
+button.InputBegan:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+		lockDragging = true
+		lockMoved = false
+		lockDragStart = input.Position
+		lockStartPos = button.Position
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				lockDragging = false
+			end
+		end)
+	end
+end)
+
+button.InputChanged:Connect(function(input)
+	if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+		lockDragInput = input
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+	if input == lockDragInput and lockDragging then
+		updateLockButton(input)
+	end
+end)
+
+-- 4. تفعيل الدوران (الشخصية تتبع الكاميرا)
+local isLocked = false
+-- عداد ضغطات زر القفل لإعادة أماكن كل القوائم بعد 3 ضغطات سريعة
+local _lockClickTimes = {}
+RunService.RenderStepped:Connect(function()
+	if isLocked and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+		local hrp = player.Character.HumanoidRootPart
+		local camLook = camera.CFrame.LookVector
+		hrp.CFrame = CFrame.new(hrp.Position, hrp.Position + Vector3.new(camLook.X, 0, camLook.Z))
+	end
+end)
+
+-- 5. عند الضغط على الزر (تغيير الحالة) + كشف 3 ضغطات سريعة لإعادة القوائم لمكانها
+button.MouseButton1Click:Connect(function()
+	if lockMoved then
+		lockMoved = false
+		return
+	end
+
+	isLocked = not isLocked
+	if isLocked then
+		button.Image = UNLOCKED_ICON
+		button.ImageColor3 = Color3.fromRGB(0, 255, 100)
+		uiStroke.Color = Color3.fromRGB(0, 255, 100)
+	else
+		button.Image = LOCKED_ICON
+		button.ImageColor3 = Color3.fromRGB(255, 255, 255)
+		uiStroke.Color = Color3.fromRGB(255, 255, 255)
+	end
+
+	-- 🔁 3 ضغطات متتالية وسريعة على زر القفل = إرجاع كل القوائم لمكانها الأصلي
+	local now = tick()
+	table.insert(_lockClickTimes, now)
+	while #_lockClickTimes > 0 and (now - _lockClickTimes[1]) > TRIPLE_CLICK_WINDOW do
+		table.remove(_lockClickTimes, 1)
+	end
+
+	if #_lockClickTimes >= 3 then
+		_lockClickTimes = {}
+		if _G.SkyResetMenuPositions then
+			local ok = pcall(_G.SkyResetMenuPositions)
+			if ok and FlyTipNotify then
+				pcall(function()
+					FlyTipNotify("🔄 تم إرجاع كل القوائم لمكانها الأصلي", false, nil, 4.0, 1.0)
+				end)
+			end
+		end
+	end
+end)
+
+local function showLockResetTip()
+	FlyTipNotify("🔄 اضغط 3 مرات على زر القفل عشان ترجع كل القوائم لمكانها", false, nil, 4.0, 1.0)
+end
+
+-- ❌ تم حذف نظام حفظ/استرجاع مواضع زر R وزر القفل.
+-- الموضع الحالي يبقى أثناء الجلسة فقط، ولا يوجد تحميل تلقائي من ملف.
+
+
+-- ⭐ نافذة التقييم: تظهر بعد 10 ثوانٍ من تشغيل السكربت.
+-- تظهر مرة واحدة فقط خلال الجلسة.
+local _SkyRatingShown = false
+
+local function SkyShowRatingPanel()
+	if _SkyRatingShown then return end
+	_SkyRatingShown = true
+
+	local ratingGui = Instance.new("ScreenGui")
+	ratingGui.Name = "SkyRatingGui"
+	ratingGui.ResetOnSpawn = false
+	ratingGui.IgnoreGuiInset = true
+	ratingGui.DisplayOrder = 999
+	ratingGui.Parent = player:WaitForChild("PlayerGui")
+
+	-- خلفية خفيفة جدًا حتى تبقى الشاشة واضحة بدون ما تغطي اللعبة.
+	local ratingDim = Instance.new("Frame")
+	ratingDim.Size = UDim2.fromScale(1, 1)
+	ratingDim.Position = UDim2.fromScale(0, 0)
+	ratingDim.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	ratingDim.BackgroundTransparency = 1
+	ratingDim.BorderSizePixel = 0
+	ratingDim.ZIndex = 1
+	ratingDim.Parent = ratingGui
+
+	local ratingBox = Instance.new("Frame")
+	ratingBox.Name = "RatingBox"
+	ratingBox.AnchorPoint = Vector2.new(0.5, 0.5)
+	ratingBox.Size = UDim2.new(0, 330, 0, 205)
+	ratingBox.Position = UDim2.new(0.5, 0, 1, 120)
+	ratingBox.BackgroundColor3 = Color3.fromRGB(12, 12, 15)
+	ratingBox.BackgroundTransparency = 0.04
+	ratingBox.BorderSizePixel = 0
+	ratingBox.ZIndex = 2
+	ratingBox.Parent = ratingGui
+
+	local ratingCorner = Instance.new("UICorner")
+	ratingCorner.CornerRadius = UDim.new(0, 18)
+	ratingCorner.Parent = ratingBox
+
+	local ratingStroke = Instance.new("UIStroke")
+	ratingStroke.Thickness = 2
+	ratingStroke.Color = Color3.fromRGB(170, 0, 255)
+	ratingStroke.Transparency = 0.08
+	ratingStroke.Parent = ratingBox
+
+	local ratingGradient = Instance.new("UIGradient")
+	ratingGradient.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(8, 8, 10)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(170, 0, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 8, 10))
+	})
+	ratingGradient.Rotation = 0
+	ratingGradient.Parent = ratingStroke
+
+	local ratingTitle = Instance.new("TextLabel")
+	ratingTitle.BackgroundTransparency = 1
+	ratingTitle.Size = UDim2.new(1, -30, 0, 42)
+	ratingTitle.Position = UDim2.new(0, 15, 0, 18)
+	ratingTitle.Text = "تقييمك يهمني ❤️"
+	ratingTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ratingTitle.TextSize = 25
+	ratingTitle.Font = Enum.Font.GothamBold
+	ratingTitle.TextTransparency = 1
+	ratingTitle.ZIndex = 3
+	ratingTitle.Parent = ratingBox
+
+	local ratingPrompt = Instance.new("TextLabel")
+	ratingPrompt.BackgroundTransparency = 1
+	ratingPrompt.Size = UDim2.new(1, -30, 0, 34)
+	ratingPrompt.Position = UDim2.new(0, 15, 0, 60)
+	ratingPrompt.Text = "اكتب تقيمك من 10/؟.."
+	ratingPrompt.TextColor3 = Color3.fromRGB(205, 205, 210)
+	ratingPrompt.TextSize = 17
+	ratingPrompt.Font = Enum.Font.Gotham
+	ratingPrompt.TextTransparency = 1
+	ratingPrompt.ZIndex = 3
+	ratingPrompt.Parent = ratingBox
+
+	local inputHolder = Instance.new("Frame")
+	inputHolder.Size = UDim2.new(0, 125, 0, 48)
+	inputHolder.Position = UDim2.new(0.5, -62, 0, 105)
+	inputHolder.BackgroundColor3 = Color3.fromRGB(5, 5, 7)
+	inputHolder.BackgroundTransparency = 0.03
+	inputHolder.BorderSizePixel = 0
+	inputHolder.ZIndex = 3
+	inputHolder.Parent = ratingBox
+
+	local inputCorner = Instance.new("UICorner")
+	inputCorner.CornerRadius = UDim.new(0, 12)
+	inputCorner.Parent = inputHolder
+
+	local inputStroke = Instance.new("UIStroke")
+	inputStroke.Thickness = 2
+	inputStroke.Color = Color3.fromRGB(170, 0, 255)
+	inputStroke.Transparency = 0.12
+	inputStroke.Parent = inputHolder
+
+	local ratingInput = Instance.new("TextBox")
+	ratingInput.BackgroundTransparency = 1
+	ratingInput.Size = UDim2.new(0, 70, 1, 0)
+	ratingInput.Position = UDim2.new(0, 8, 0, 0)
+	ratingInput.Text = ""
+	ratingInput.PlaceholderText = "اكتب ياحلو❤️"
+	ratingInput.PlaceholderColor3 = Color3.fromRGB(110, 110, 120)
+	ratingInput.TextColor3 = Color3.fromRGB(255, 255, 255)
+	ratingInput.TextSize = 23
+	ratingInput.Font = Enum.Font.GothamBold
+	ratingInput.ClearTextOnFocus = false
+	ratingInput.TextXAlignment = Enum.TextXAlignment.Center
+	ratingInput.ZIndex = 4
+	ratingInput.Parent = inputHolder
+
+	local outOfTen = Instance.new("TextLabel")
+	outOfTen.BackgroundTransparency = 1
+	outOfTen.Size = UDim2.new(0, 40, 1, 0)
+	outOfTen.Position = UDim2.new(0, 80, 0, 0)
+	outOfTen.Text = "/10"
+	outOfTen.TextColor3 = Color3.fromRGB(170, 0, 255)
+	outOfTen.TextSize = 20
+	outOfTen.Font = Enum.Font.GothamBold
+	outOfTen.ZIndex = 4
+	outOfTen.Parent = inputHolder
+
+	-- يقبل رقم واحد فقط من 1 إلى 10.
+	ratingInput:GetPropertyChangedSignal("Text"):Connect(function()
+		local cleaned = ratingInput.Text:gsub("%D", "")
+		if #cleaned > 2 then
+			cleaned = cleaned:sub(1, 2)
+		end
+		if cleaned ~= "" then
+			local n = tonumber(cleaned)
+			if n and n > 10 then
+				cleaned = "10"
+			end
+		end
+		if ratingInput.Text ~= cleaned then
+			ratingInput.Text = cleaned
+		end
+	end)
+
+	local function finishRating()
+		local value = tonumber(ratingInput.Text)
+		if not value or value < 1 or value > 10 then
+			ratingInput.Text = ""
+			ratingInput.PlaceholderText = "1 - 10"
+			ratingInput:CaptureFocus()
+			return
+		end
+
+		ratingInput:ReleaseFocus()
+
+		-- ⭐ حفظ التقييم في Firebase عشان يظهر للمطور عند تشغيل السكربت.
+		local ratingPayload = {
+			sender = game.Players.LocalPlayer.Name,
+			userId = game.Players.LocalPlayer.UserId,
+			rating = value,
+			text = tostring(value) .. "/10",
+			timestamp = os.time(),
+			placeId = game.PlaceId
+		}
+		task.spawn(function()
+			if request then
+				pcall(function()
+					request({
+						Url = RATINGS_URL .. "?auth=" .. AUTH_TOKEN,
+						Method = "POST",
+						Headers = {["Content-Type"] = "application/json"},
+						Body = game:GetService("HttpService"):JSONEncode(ratingPayload)
+					})
+				end)
+			end
+		end)
+
+		-- القائمة تطلع لتحت بسلاسة.
+		local exitTween = SkyTw(
+			ratingBox,
+			TweenInfo.new(0.65, Enum.EasingStyle.Quint, Enum.EasingDirection.In),
+			{Position = UDim2.new(0.5, 0, 1, 120)}
+		)
+		local dimTween = SkyTw(
+			ratingDim,
+			TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{BackgroundTransparency = 1}
+		)
+
+		exitTween:Play()
+		dimTween:Play()
+		exitTween.Completed:Wait()
+
+		ratingBox:Destroy()
+
+		-- كلمة شكر تطلع بعد اختفاء القائمة.
+		local thanks = Instance.new("TextLabel")
+		thanks.BackgroundTransparency = 1
+		thanks.AnchorPoint = Vector2.new(0.5, 0.5)
+		thanks.Size = UDim2.new(0, 330, 0, 70)
+		thanks.Position = UDim2.new(0.5, 0, 1, 90)
+		thanks.Text = "شكراً ❤️"
+		thanks.TextColor3 = Color3.fromRGB(255, 255, 255)
+		thanks.TextSize = 30
+		thanks.Font = Enum.Font.GothamBold
+		thanks.TextTransparency = 1
+		thanks.ZIndex = 5
+		thanks.Parent = ratingGui
+
+		local thanksIn = SkyTw(
+			thanks,
+			TweenInfo.new(0.55, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+			{
+				Position = UDim2.new(0.5, 0, 0.5, 0),
+				TextTransparency = 0
+			}
+		)
+		thanksIn:Play()
+		task.wait(1.25)
+
+		SkyTw(
+			thanks,
+			TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{
+				Position = UDim2.new(0.5, 0, 1, 90),
+				TextTransparency = 1
+			}
+		):Play()
+
+		task.wait(0.5)
+		ratingGui:Destroy()
+	end
+
+	-- عند كتابة الرقم والضغط Enter، أو فقدان التركيز، يخلص التقييم.
+	ratingInput.FocusLost:Connect(function(enterPressed)
+		if enterPressed then
+			finishRating()
+		end
+	end)
+
+	-- دخول القائمة من تحت إلى فوق.
+	SkyTw(
+		ratingBox,
+		TweenInfo.new(0.85, Enum.EasingStyle.Quint, Enum.EasingDirection.Out),
+		{Position = UDim2.new(0.5, 0, 0.5, 0)}
+	):Play()
+
+	SkyTw(
+		ratingDim,
+		TweenInfo.new(0.55, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{BackgroundTransparency = 0.55}
+	):Play()
+
+	task.delay(0.18, function()
+		SkyTw(ratingTitle, TweenInfo.new(0.35), {TextTransparency = 0}):Play()
+		SkyTw(ratingPrompt, TweenInfo.new(0.4), {TextTransparency = 0}):Play()
+	end)
+
+	task.delay(0.45, function()
+		ratingInput:CaptureFocus()
+	end)
+end
+
+-- ⭐ قائمة التقييمات للمطور فقط: تظهر من تحت وتتصرف مثل قائمة الشات.
+local _SkyRatingsListShown = false
+
+local function SkyShowRatingsList()
+	if _SkyRatingsListShown then return end
+	if not player or not player.Parent or player.Name ~= "AAbbooyi" then return end
+	if not request then return end
+	_SkyRatingsListShown = true
+
+	local HttpService = game:GetService("HttpService")
+	local UIS = game:GetService("UserInputService")
+
+	-- 📥 يجيب التقييمات من Firebase (nil لو فشل الطلب)
+	local function fetchEntries()
+		local ok, res = pcall(function()
+			return request({Url = RATINGS_URL .. "?auth=" .. AUTH_TOKEN, Method = "GET"})
+		end)
+		if not (ok and res and res.Body) then return nil end
+		if res.Body == "null" then return {} end
+		local okData, ratings = pcall(function()
+			return HttpService:JSONDecode(res.Body)
+		end)
+		if not (okData and type(ratings) == "table") then return nil end
+
+		local out = {}
+		for id, item in pairs(ratings) do
+			if type(item) == "table" and tonumber(item.rating) then
+				table.insert(out, {id = id, data = item})
+			end
+		end
+		table.sort(out, function(a, b)
+			return tonumber(a.data.timestamp or 0) > tonumber(b.data.timestamp or 0)
+		end)
+		return out
+	end
+
+	-- 🕒 وقت التقييم: "قبل 5 دقايق"
+	local function timeAgo(ts)
+		ts = tonumber(ts)
+		if not ts then return "" end
+		local d = math.max(0, os.time() - ts)
+		if d < 60 then return "الحين" end
+		if d < 3600 then
+			local n = math.floor(d / 60)
+			return n == 1 and "قبل دقيقة" or ("قبل " .. n .. " دقايق")
+		end
+		if d < 86400 then
+			local n = math.floor(d / 3600)
+			return n == 1 and "قبل ساعة" or ("قبل " .. n .. " ساعات")
+		end
+		local n = math.floor(d / 86400)
+		return n == 1 and "قبل يوم" or ("قبل " .. n .. " ايام")
+	end
+
+	-- 🔔 القايمة تطلع بس إذا فيه تقييم جديد ما شفته قبل. لو ما أحد قيّم، ما تبان.
+	local SEEN_FILE = "SkyConfig/RatingsSeen.txt"
+	local function loadSeen()
+		local v = 0
+		pcall(function()
+			if readfile and isfile and isfile(SEEN_FILE) then
+				v = tonumber(readfile(SEEN_FILE)) or 0
+			end
+		end)
+		return v
+	end
+	local function saveSeen(v)
+		pcall(function()
+			if writefile and makefolder and isfolder then
+				if not isfolder("SkyConfig") then makefolder("SkyConfig") end
+				writefile(SEEN_FILE, tostring(v))
+			end
+		end)
+	end
+	local function newestTs(list)
+		local m = 0
+		for _, e in ipairs(list) do
+			local t = tonumber(e.data.timestamp) or 0
+			if t > m then m = t end
+		end
+		return m
+	end
+
+	local seenTs = loadSeen()
+	local entries = fetchEntries()
+	if not entries or newestTs(entries) <= seenTs then
+		_SkyRatingsListShown = false
+		return
+	end
+	seenTs = newestTs(entries)
+	saveSeen(seenTs)
+
+	-- 🧹 نمسح أي قائمة قديمة باقية من تشغيل سابق (وإلا تبقى النسخة القديمة بحوافها فوق/تحت الجديدة)
+	do
+		local pg = player:WaitForChild("PlayerGui")
+		for _, g in ipairs(pg:GetChildren()) do
+			if g.Name == "SkyRatingsListGui" then g:Destroy() end
+		end
+	end
+
+	local gui = Instance.new("ScreenGui")
+	gui.Name = "SkyRatingsListGui"
+	gui.ResetOnSpawn = false
+	gui.IgnoreGuiInset = true
+	gui.DisplayOrder = 1001
+	gui.Parent = player:WaitForChild("PlayerGui")
+
+	local box = Instance.new("Frame")
+	box.Name = "RatingsBox"
+	box.AnchorPoint = Vector2.new(0.5, 1)
+	box.Size = UDim2.new(0, 355, 0, 300)
+	box.Position = UDim2.new(0.5, 0, 1, 25)
+	box.BackgroundColor3 = Color3.fromRGB(10, 10, 13)
+	box.BackgroundTransparency = 0.04
+	box.BorderSizePixel = 0
+	box.ZIndex = 10
+	box.Parent = gui
+	Instance.new("UICorner", box).CornerRadius = UDim.new(0, 18)
+
+	local stroke = Instance.new("UIStroke", box)
+	stroke.Thickness = 2.5
+	stroke.Color = Color3.fromRGB(170, 0, 255)
+	stroke.Transparency = 0.05
+	local glow = Instance.new("UIGradient", stroke)
+	glow.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(170, 0, 255)),
+		ColorSequenceKeypoint.new(0.5, Color3.fromRGB(5, 5, 8)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 0, 255))
+	})
+	task.spawn(function()
+		while glow and glow.Parent do
+			if not _G.SkyGlowOff then glow.Rotation = (glow.Rotation + 2) % 360 end
+			task.wait(0.03)
+		end
+	end)
+
+	local title = Instance.new("TextLabel", box)
+	title.Size = UDim2.new(1, -24, 0, 38)
+	title.Position = UDim2.new(0, 12, 0, 8)
+	title.BackgroundTransparency = 1
+	title.Text = "الي قيمو سكربتك❤️"
+	title.TextColor3 = Color3.fromRGB(255, 255, 255)
+	title.Font = Enum.Font.GothamBold
+	title.TextSize = 21
+	title.TextXAlignment = Enum.TextXAlignment.Center
+	title.ZIndex = 12
+	title.TextTransparency = 1
+
+	local sub = Instance.new("TextLabel", box)
+	sub.Size = UDim2.new(1, -24, 0, 20)
+	sub.Position = UDim2.new(0, 12, 0, 43)
+	sub.BackgroundTransparency = 1
+	sub.Text = tostring(#entries) .. " تقييم"
+	sub.TextColor3 = Color3.fromRGB(175, 0, 255)
+	sub.Font = Enum.Font.Gotham
+	sub.TextSize = 12
+	sub.TextXAlignment = Enum.TextXAlignment.Center
+	sub.ZIndex = 12
+	sub.TextTransparency = 1
+
+	local list = Instance.new("ScrollingFrame", box)
+	list.Name = "RatingsList"
+	list.Size = UDim2.new(1, -16, 1, -76)
+	list.Position = UDim2.new(0, 8, 0, 68)
+	list.BackgroundTransparency = 1
+	list.BorderSizePixel = 0
+	list.Active = true
+	list.ClipsDescendants = true
+	list.ScrollingEnabled = true
+	list.ScrollBarThickness = 4
+	list.ScrollBarImageColor3 = Color3.fromRGB(170, 0, 255)
+	list.ScrollBarImageTransparency = 0
+	list.ScrollingDirection = Enum.ScrollingDirection.Y
+	list.ElasticBehavior = Enum.ElasticBehavior.Always
+	list.CanvasSize = UDim2.new(0, 0, 0, 0)
+	list.ZIndex = 11
+
+	local layout = Instance.new("UIListLayout", list)
+	layout.Padding = UDim.new(0, 6)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+
+	local pad = Instance.new("UIPadding", list)
+	pad.PaddingLeft = UDim.new(0, 3)
+	pad.PaddingRight = UDim.new(0, 3)
+	pad.PaddingTop = UDim.new(0, 3)
+	pad.PaddingBottom = UDim.new(0, 8)
+
+	-- 📜 سحاب مثل الدردشة: الكانفس يكبر مع عدد الرسايل وتقدر تنزل لتحت
+	local function refreshCanvas()
+		list.CanvasSize = UDim2.new(0, 0, 0, layout.AbsoluteContentSize.Y + 14)
+	end
+	layout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(refreshCanvas)
+
+	-- ✨ لفّة واحدة تحرّك كل توهّج الرسايل (بدل لوب لكل رسالة)
+	local rowGlows = {}
+	task.spawn(function()
+		while gui and gui.Parent do
+			for _, g in ipairs(rowGlows) do
+				if g.Parent then g.Rotation = (g.Rotation + 2) % 360 end
+			end
+			task.wait(0.03)
+		end
+	end)
+
+	local timeLabels = {}
+
+	local function buildRows(listEntries)
+		for _, child in ipairs(list:GetChildren()) do
+			if child:IsA("Frame") or child.Name == "EmptyLabel" then child:Destroy() end
+		end
+		table.clear(rowGlows)
+		table.clear(timeLabels)
+		sub.Text = tostring(#listEntries) .. " تقييم"
+
+	for i, entry in ipairs(listEntries) do
+		local data = entry.data
+		local row = Instance.new("Frame", list)
+		row.Name = "RatingRow"
+		row.Size = UDim2.new(1, -6, 0, 44)
+		row.BackgroundColor3 = Color3.fromRGB(17, 17, 21)
+		row.BackgroundTransparency = 0.03
+		row.BorderSizePixel = 0
+		row.LayoutOrder = i
+		row.ZIndex = 12
+		Instance.new("UICorner", row).CornerRadius = UDim.new(0, 12)
+
+		-- بدل الحافة البنفسجية الثابتة: توهّج بنفسجي + أسود متحرك
+		local rowStroke = Instance.new("UIStroke", row)
+		rowStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		rowStroke.Thickness = 2
+		rowStroke.Color = Color3.fromRGB(170, 0, 255)
+		rowStroke.Transparency = 0.05
+		local rowGlow = Instance.new("UIGradient", rowStroke)
+		rowGlow.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(170, 0, 255)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(5, 5, 8)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 0, 255))
+		})
+		rowGlow.Rotation = (i * 40) % 360
+		table.insert(rowGlows, rowGlow)
+
+		local avatar = Instance.new("ImageLabel", row)
+		avatar.Name = "Avatar"
+		avatar.Size = UDim2.new(0, 32, 0, 32)
+		avatar.Position = UDim2.new(0, 8, 0.5, -16)
+		avatar.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+		avatar.BackgroundTransparency = 1
+		avatar.BorderSizePixel = 0
+		avatar.ZIndex = 14
+		Instance.new("UICorner", avatar).CornerRadius = UDim.new(1, 0)
+
+		-- ✨ حافة الصورة: توهّج بنفسجي + أسود، نفس لون وسرعة القايمة
+		local avatarStroke = Instance.new("UIStroke", avatar)
+		avatarStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		avatarStroke.Thickness = 2
+		avatarStroke.Color = Color3.fromRGB(170, 0, 255)
+		avatarStroke.Transparency = 0.05
+		local avatarGlow = Instance.new("UIGradient", avatarStroke)
+		avatarGlow.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(170, 0, 255)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(5, 5, 8)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(170, 0, 255))
+		})
+		avatarGlow.Rotation = (i * 40) % 360
+		table.insert(rowGlows, avatarGlow)
+
+		local uid = tonumber(data.userId)
+		if uid then
+			avatar.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(uid) .. "&w=150&h=150"
+		else
+			avatar.Image = ""
+		end
+
+		local name = Instance.new("TextLabel", row)
+		name.Size = UDim2.new(1, -165, 0, 18)
+		name.Position = UDim2.new(0, 48, 0, 5)
+		name.BackgroundTransparency = 1
+		name.Text = tostring(data.sender or "مستخدم")
+		name.TextColor3 = Color3.fromRGB(235, 235, 240)
+		name.Font = Enum.Font.GothamBold
+		name.TextSize = 13
+		name.TextXAlignment = Enum.TextXAlignment.Left
+		name.TextTruncate = Enum.TextTruncate.AtEnd
+		name.ZIndex = 14
+
+		local message = Instance.new("TextLabel", row)
+		message.Size = UDim2.new(1, -108, 0, 16)
+		message.Position = UDim2.new(0, 48, 0, 23)
+		message.BackgroundTransparency = 1
+		message.Text = "تقييمه: " .. tostring(data.rating) .. "/10 ❤️"
+		message.TextColor3 = Color3.fromRGB(170, 0, 255)
+		message.Font = Enum.Font.Gotham
+		message.TextSize = 11
+		message.TextXAlignment = Enum.TextXAlignment.Left
+		message.ZIndex = 14
+
+		local score = Instance.new("TextLabel", row)
+		score.Size = UDim2.new(0, 45, 0, 26)
+		score.Position = UDim2.new(1, -53, 0.5, -13)
+		score.BackgroundTransparency = 1
+		score.Text = tostring(data.rating) .. "/10"
+		score.TextColor3 = Color3.fromRGB(170, 0, 255)
+		score.Font = Enum.Font.GothamBold
+		score.TextSize = 14
+		score.TextXAlignment = Enum.TextXAlignment.Center
+		score.ZIndex = 14
+
+		local timeLbl = Instance.new("TextLabel", row)
+		timeLbl.Size = UDim2.new(0, 92, 0, 18)
+		timeLbl.Position = UDim2.new(1, -150, 0, 5)
+		timeLbl.BackgroundTransparency = 1
+		timeLbl.Text = timeAgo(data.timestamp)
+		timeLbl.TextColor3 = Color3.fromRGB(150, 150, 165)
+		timeLbl.Font = Enum.Font.Gotham
+		timeLbl.TextSize = 11
+		timeLbl.TextXAlignment = Enum.TextXAlignment.Right
+		timeLbl.ZIndex = 14
+		table.insert(timeLabels, {label = timeLbl, ts = data.timestamp})
+	end
+
+	if #listEntries == 0 then
+		local empty = Instance.new("TextLabel", list)
+		empty.Name = "EmptyLabel"
+		empty.Size = UDim2.new(1, -6, 0, 40)
+		empty.BackgroundTransparency = 1
+		empty.Text = "ما فيه تقييمات للحين - اسحب لتحت للتحديث"
+		empty.TextColor3 = Color3.fromRGB(150, 150, 165)
+		empty.Font = Enum.Font.Gotham
+		empty.TextSize = 12
+		empty.ZIndex = 12
+	end
+
+	refreshCanvas()
+end
+
+buildRows(entries)
+
+-- 🕒 تحديث نص الوقت كل 15 ثانية
+task.spawn(function()
+	while gui and gui.Parent do
+		task.wait(15)
+		for _, t in ipairs(timeLabels) do
+			if t.label.Parent then t.label.Text = timeAgo(t.ts) end
+		end
+	end
+end)
+
+-- 🔄 سحب لفوق (وإنت بأول القايمة) = تحديث مثل التحميل، وتظهر الدايرة
+local spinner = Instance.new("Frame", box)
+spinner.Name = "RefreshSpinner"
+spinner.AnchorPoint = Vector2.new(0.5, 0)
+spinner.Size = UDim2.new(0, 26, 0, 26)
+spinner.Position = UDim2.new(0.5, 105, 0, 6)
+spinner.BackgroundColor3 = Color3.fromRGB(10, 10, 13)
+spinner.BackgroundTransparency = 1
+spinner.BorderSizePixel = 0
+spinner.ZIndex = 30
+Instance.new("UICorner", spinner).CornerRadius = UDim.new(1, 0)
+
+local spinStroke = Instance.new("UIStroke", spinner)
+spinStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+spinStroke.Thickness = 3
+spinStroke.Color = Color3.fromRGB(170, 0, 255)
+spinStroke.Transparency = 1
+local spinGrad = Instance.new("UIGradient", spinStroke)
+spinGrad.Transparency = NumberSequence.new({
+	NumberSequenceKeypoint.new(0, 0),
+	NumberSequenceKeypoint.new(0.6, 0),
+	NumberSequenceKeypoint.new(0.601, 1),
+	NumberSequenceKeypoint.new(1, 1)
+})
+
+local refreshing = false
+local dragStartY, pullDist = nil, 0
+local PULL_NEED = 60
+
+-- الدايرة فوق يمين القايمة (يمين عنوان "الي قيمو سكربتك") وتطلع بنعومة: تظهر وتنزل شوي شوي
+local SPIN_HIDDEN_POS = UDim2.new(0.5, 105, 0, 6)
+local SPIN_SHOWN_POS = UDim2.new(0.5, 105, 0, 14)
+local spinnerShown = false
+
+local function showSpinner(dur)
+	if spinnerShown then return end
+	spinnerShown = true
+	local info = TweenInfo.new(dur or 0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	SkyTw(spinner, info, {BackgroundTransparency = 0.08, Position = SPIN_SHOWN_POS}):Play()
+	SkyTw(spinStroke, info, {Transparency = 0}):Play()
+end
+
+local function hideSpinner()
+	if not spinnerShown then return end
+	spinnerShown = false
+	local info = TweenInfo.new(0.45, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	SkyTw(spinner, info, {BackgroundTransparency = 1, Position = SPIN_HIDDEN_POS}):Play()
+	SkyTw(spinStroke, info, {Transparency = 1}):Play()
+end
+
+local function doRefresh()
+	if refreshing then return end
+	refreshing = true
+	showSpinner(0.35)
+	local started = os.clock()
+	task.spawn(function()
+		local fresh = fetchEntries()
+		local left = 0.9 - (os.clock() - started)
+		if left > 0 then task.wait(left) end
+		if gui and gui.Parent then
+			if fresh then
+				buildRows(fresh)
+				local t = newestTs(fresh)
+				if t > seenTs then seenTs = t; saveSeen(t) end
+			end
+			hideSpinner()
+		end
+		refreshing = false
+	end)
+end
+
+task.spawn(function()
+	while gui and gui.Parent do
+		if refreshing then spinGrad.Rotation = (spinGrad.Rotation + 14) % 360 end
+		task.wait(0.03)
+	end
+end)
+
+local function isPress(i)
+	return i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1
+end
+local function isMove(i)
+	return i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseMovement
+end
+
+local conns = {}
+table.insert(conns, list.InputBegan:Connect(function(input)
+	if not isPress(input) or refreshing then return end
+	if list.CanvasPosition.Y <= 2 then
+		dragStartY = input.Position.Y
+		pullDist = 0
+	else
+		dragStartY = nil
+	end
+end))
+table.insert(conns, UIS.InputChanged:Connect(function(input)
+	if not dragStartY or refreshing or not isMove(input) then return end
+	if list.CanvasPosition.Y > 2 then
+		dragStartY = input.Position.Y
+		pullDist = 0
+		hideSpinner()
+		return
+	end
+	pullDist = math.max(0, input.Position.Y - dragStartY)
+	if pullDist > 6 then showSpinner(0.5) end
+	spinGrad.Rotation = (pullDist * 5) % 360
+end))
+table.insert(conns, UIS.InputEnded:Connect(function(input)
+	if not dragStartY or not isPress(input) then return end
+	local d = pullDist
+	dragStartY, pullDist = nil, 0
+	if refreshing then return end
+	if d >= PULL_NEED then
+		doRefresh()
+	else
+		hideSpinner()
+	end
+end))
+gui.Destroying:Connect(function()
+	for _, c in ipairs(conns) do c:Disconnect() end
+end)
+
+	-- ✖ زر X لقفل القايمة (فوق يمين). إذا جا تقييم جديد بعدين تطلع مرة ثانية.
+	local closeBtn = Instance.new("TextButton", box)
+	closeBtn.Name = "CloseBtn"
+	closeBtn.AnchorPoint = Vector2.new(1, 0)
+	closeBtn.Size = UDim2.new(0, 26, 0, 26)
+	closeBtn.Position = UDim2.new(1, -10, 0, 12)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(17, 17, 21)
+	closeBtn.BorderSizePixel = 0
+	closeBtn.AutoButtonColor = false
+	closeBtn.Text = "X"
+	closeBtn.TextColor3 = Color3.fromRGB(170, 0, 255)
+	closeBtn.Font = Enum.Font.GothamBold
+	closeBtn.TextSize = 14
+	closeBtn.ZIndex = 31
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(1, 0)
+
+	local closing = false
+	closeBtn.MouseButton1Click:Connect(function()
+		if closing then return end
+		closing = true
+		local outTween = SkyTw(box, TweenInfo.new(0.5, Enum.EasingStyle.Quint, Enum.EasingDirection.In), {
+			Position = UDim2.new(0.5, 0, 1, 40)
+		})
+		outTween:Play()
+		outTween.Completed:Wait()
+		if gui and gui.Parent then gui:Destroy() end
+		_SkyRatingsListShown = false
+	end)
+
+	SkyTw(box, TweenInfo.new(0.7, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), {
+		Position = UDim2.new(0.5, 0, 1, -18)
+	}):Play()
+	SkyTw(title, TweenInfo.new(0.45), {TextTransparency = 0}):Play()
+	SkyTw(sub, TweenInfo.new(0.5), {TextTransparency = 0}):Play()
+
+	-- تظل مفتوحة للمطور، وتقدر تسحب بالقائمة إذا صار عددهم كثير.
+end
+
+-- المستخدم العادي يشوف طلب التقييم بعد 10 ثواني، المطور AAbbooyi ما يطلع له.
+-- المطوّر: يفحص التقييمات عند التشغيل وكل دقيقة. القايمة تطلع بس لو فيه تقييم جديد.
+task.spawn(function()
+	if not (player and player.Name == "AAbbooyi") then return end
+	task.wait(1)
+	while player and player.Parent do
+		SkyShowRatingsList()
+		task.wait(60)
+	end
+end)
+
+-- ⭐ طلب التقييم للمستخدم: يطلع بعد 30 ثانية، ومرتين بس:
+-- المرة الأولى بأول تشغيل، والمرة الثانية لما يصير شغّل السكربت 8 مرات (بعد 30 ثانية)، وبعدها ما يطلع أبد.
+do
+	local STATE_FILE = "SkyConfig/RatingPrompt.txt" -- "عدد التشغيلات,عدد مرات الظهور"
+	local RUNS_FOR_SECOND = 8
+	local PROMPT_DELAY = 30
+
+	local runs, shown = 0, 0
+	pcall(function()
+		if readfile and isfile and isfile(STATE_FILE) then
+			local a, b = tostring(readfile(STATE_FILE)):match("^(%d+),(%d+)")
+			runs = tonumber(a) or 0
+			shown = tonumber(b) or 0
+		end
+	end)
+
+	local function saveState()
+		pcall(function()
+			if writefile and makefolder and isfolder then
+				if not isfolder("SkyConfig") then makefolder("SkyConfig") end
+				writefile(STATE_FILE, tostring(runs) .. "," .. tostring(shown))
+			end
+		end)
+	end
+
+	local function due()
+		return shown == 0 or (shown == 1 and runs >= RUNS_FOR_SECOND)
+	end
+
+	if player and player.Name ~= "AAbbooyi" then
+		-- التشغيل التلقائي بعد الانتقال لسيرفر جديد ما ينحسب كتشغيل جديد
+		local queuedRun = false
+		pcall(function()
+			queuedRun = game:GetService("CoreGui"):FindFirstChild("SkyQueuedRunMarker") ~= nil
+		end)
+		if not queuedRun then
+			runs = runs + 1
+			saveState()
+		end
+
+		if due() then
+			task.delay(PROMPT_DELAY, function()
+				if player and player.Parent and due() then
+					shown = shown + 1
+					saveState()
+					SkyShowRatingPanel()
+				end
+			end)
+		end
+	end
+end
+
+-- 💡 معلومة زر R: تظهر 4 ثوانٍ ثم تختفي تدريجيًا وببطء
+_G.SkyInfoTipsDone = false
+task.spawn(function()
+    task.wait(0.8)
+    showTouchRespawnTip() -- تظهر ثم تختفي (حوالي 3.5 ثانية)
+    task.wait(1.15)
+    showLockResetTip() -- تظهر بعد ما تخلص معلومة R
+    _G.SkyInfoTipsDone = true
+end)
+
+-- 💡 معلومة زر القفل: تظهر بعد معلومة زر R عشان ما تتداخل معاها
