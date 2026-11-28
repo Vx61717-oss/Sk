@@ -4076,14 +4076,21 @@ end)()
         local DROP_SPEED, DROP_W, DROP_H = 130, 30, 16
         local WIDE_TIME, WIDE_MULT = 12, 1.5
         local FIRE_TIME, DOUBLE_TIME, SHRINK_TIME = 8, 12, 10
+        local REVERSE_TIME = 8
         local DROP_KINDS = {
-            { id = "wide",   sym = "↔",  color = Color3.fromRGB(50, 150, 220), weight = 25, text = "المضرب صار أعرض!" },
-            { id = "slow",   sym = "🐢", color = Color3.fromRGB(60, 160, 80),  weight = 20, text = "الكرة أبطأ!" },
-            { id = "life",   sym = "❤",  color = Color3.fromRGB(200, 55, 70),  weight = 8,  text = "+1 محاولة!" },
-            { id = "fire",   sym = "🔥", color = Color3.fromRGB(215, 110, 30), weight = 15, text = "كرة نارية! تخترق الطوب" },
-            { id = "double", sym = "x2", color = Color3.fromRGB(215, 185, 40), weight = 15, text = "نقاط مضاعفة!" },
-            { id = "shield", sym = "🛡", color = Color3.fromRGB(70, 190, 210), weight = 10, text = "درع! ينقذك مرة وحدة" },
-            { id = "shrink", sym = "💀", color = Color3.fromRGB(110, 40, 140), weight = 7,  text = "انتبه! المضرب صار أصغر" },
+            -- جوائز حلوة (80%)
+            { id = "wide",    sym = "↔",  color = Color3.fromRGB(50, 150, 220), weight = 18, text = "المضرب صار أعرض!" },
+            { id = "slow",    sym = "🐢", color = Color3.fromRGB(60, 160, 80),  weight = 14, text = "الكرة أبطأ!" },
+            { id = "life",    sym = "❤",  color = Color3.fromRGB(200, 55, 70),  weight = 6,  text = "+1 محاولة!" },
+            { id = "fire",    sym = "🔥", color = Color3.fromRGB(215, 110, 30), weight = 11, text = "كرة نارية! تخترق الطوب" },
+            { id = "double",  sym = "x2", color = Color3.fromRGB(215, 185, 40), weight = 11, text = "نقاط مضاعفة!" },
+            { id = "shield",  sym = "🛡", color = Color3.fromRGB(70, 190, 210), weight = 8,  text = "درع! ينقذك مرة وحدة" },
+            { id = "multi",   sym = "●●●", color = Color3.fromRGB(120, 90, 210), weight = 12, text = "صار عندك 3 كرات!" },
+            -- جوائز سيئة (20%)
+            { id = "shrink",  sym = "💀", color = Color3.fromRGB(110, 40, 140), weight = 7,  text = "انتبه! المضرب صار أصغر" },
+            { id = "fast",    sym = "⚡", color = Color3.fromRGB(150, 60, 50),  weight = 6,  text = "الكرة صارت أسرع!" },
+            { id = "reverse", sym = "🔄", color = Color3.fromRGB(90, 90, 100),  weight = 5,  text = "التحكم معكوس!" },
+            { id = "hurt",    sym = "💔", color = Color3.fromRGB(70, 20, 30),   weight = 2,  text = "-1 محاولة!" },
         }
         local unlocked = {1, 1, 1, 1} -- آخر مرحلة مفتوحة لكل صعوبة، تبدأ بالمرحلة 1 بس
         local DIFFS = {
@@ -4287,7 +4294,7 @@ end)()
                 speed = START_SPEED,
                 bricks = {}, alive = 0,
                 dir = 0, dragging = false,
-                diff = DIFFS[2], diffIdx = 2, stage = 1, drops = {}, wideT = 0, toastId = 0, fireT = 0, doubleT = 0, shield = false,
+                diff = DIFFS[2], diffIdx = 2, stage = 1, drops = {}, wideT = 0, toastId = 0, fireT = 0, doubleT = 0, shield = false, extra = {}, reverseT = 0,
             }
             local menu -- قائمة اختيار الصعوبة (تنبني تحت)
 
@@ -4343,27 +4350,41 @@ end)()
                 end
             end
 
-            local function setVelocity(angle)
+            local function setVelocity(B, angle)
                 -- angle بالراديان عن الاتجاه للأعلى (موجب = يمين)
-                S.vx = S.speed * math.sin(angle)
-                S.vy = -S.speed * math.cos(angle)
+                B.vx = S.speed * math.sin(angle)
+                B.vy = -S.speed * math.cos(angle)
             end
 
-            local function normalizeVelocity()
-                local m = math.sqrt(S.vx * S.vx + S.vy * S.vy)
+            local function normalizeVelocity(B)
+                local m = math.sqrt(B.vx * B.vx + B.vy * B.vy)
                 if m < 1 then return end
-                S.vx, S.vy = S.vx / m * S.speed, S.vy / m * S.speed
+                B.vx, B.vy = B.vx / m * S.speed, B.vy / m * S.speed
                 -- نمنع الكرة من التحرك أفقياً تقريباً وتعلق بين الجدران
                 local minVy = S.speed * 0.22
-                if math.abs(S.vy) < minVy then
-                    S.vy = (S.vy >= 0 and 1 or -1) * minVy
-                    local sign = S.vx >= 0 and 1 or -1
-                    S.vx = sign * math.sqrt(math.max(S.speed * S.speed - S.vy * S.vy, 0))
+                if math.abs(B.vy) < minVy then
+                    B.vy = (B.vy >= 0 and 1 or -1) * minVy
+                    local sign = B.vx >= 0 and 1 or -1
+                    B.vx = sign * math.sqrt(math.max(S.speed * S.speed - B.vy * B.vy, 0))
                 end
+            end
+
+            -- يطبّع سرعة كل الكرات (الرئيسية + الإضافية)
+            local function normalizeAll()
+                normalizeVelocity(S)
+                for _, e in ipairs(S.extra) do normalizeVelocity(e) end
+            end
+
+            local function clearExtras()
+                for _, e in ipairs(S.extra) do
+                    if e.frame then e.frame:Destroy() end
+                end
+                S.extra = {}
             end
 
             local function resetBall()
                 clearDrops()
+                clearExtras()
                 S.state = "ready"
                 S.vx, S.vy = 0, 0
                 S.bx, S.by = S.px, PADDLE_Y - BALL_R
@@ -4374,7 +4395,7 @@ end)()
                 S.diff, S.diffIdx = diff, idx
                 PADDLE_W, START_SPEED, MAX_SPEED = diff.paddle, diff.speed, diff.maxSpeed
                 S.score, S.lives, S.stage = 0, diff.lives, stage or 1
-                S.wideT, S.fireT, S.doubleT, S.shield = 0, 0, 0, false
+                S.wideT, S.fireT, S.doubleT, S.shield, S.reverseT = 0, 0, 0, false, 0
                 shieldLine.Visible = false
                 S.speed = math.min(START_SPEED + (S.stage - 1) * 25, MAX_SPEED)
                 S.px = W / 2
@@ -4389,12 +4410,13 @@ end)()
                 if S.state ~= "ready" then return end
                 S.state = "playing"
                 msg.Visible = false
-                setVelocity(math.rad(math.random(-25, 25)))
-                normalizeVelocity()
+                setVelocity(S, math.rad(math.random(-25, 25)))
+                normalizeAll()
             end
 
             local function gameOver()
                 S.state = "over"
+                clearExtras()
                 S.vx, S.vy = 0, 0
                 if S.score > bestScore then bestScore = S.score end
                 updateStatus()
@@ -4417,6 +4439,7 @@ end)()
                 if S.stage >= STAGES then
                     -- خلّصت المراحل الثلاث
                     S.state = "won"
+                    clearExtras()
                     S.vx, S.vy = 0, 0
                     if S.score > bestScore then bestScore = S.score end
                     updateStatus()
@@ -4603,7 +4626,7 @@ end)()
                     S.px = math.clamp(S.px, WALL + PADDLE_W / 2, W - WALL - PADDLE_W / 2)
                 elseif kind.id == "slow" then
                     S.speed = math.max(S.speed * 0.78, START_SPEED * 0.7)
-                    normalizeVelocity()
+                    normalizeAll()
                 elseif kind.id == "life" then
                     S.lives = S.lives + 1
                     updateStatus()
@@ -4614,6 +4637,26 @@ end)()
                 elseif kind.id == "shield" then
                     S.shield = true
                     shieldLine.Visible = true
+                elseif kind.id == "multi" then
+                    local need = 3 - (1 + #S.extra)
+                    for i = 1, need do
+                        local fr = box(Color3.new(1, 1, 1), S.bx - BALL_R, S.by - BALL_R, BALL_R * 2, BALL_R * 2, 12007)
+                        Instance.new("UICorner", fr).CornerRadius = UDim.new(1, 0)
+                        local a = (i % 2 == 1) and -0.5 or 0.5
+                        local cs, sn = math.cos(a), math.sin(a)
+                        local e = { bx = S.bx, by = S.by, frame = fr,
+                            vx = S.vx * cs - S.vy * sn, vy = S.vx * sn + S.vy * cs }
+                        normalizeVelocity(e)
+                        S.extra[#S.extra + 1] = e
+                    end
+                elseif kind.id == "fast" then
+                    S.speed = math.min(S.speed * 1.25, MAX_SPEED)
+                    normalizeAll()
+                elseif kind.id == "reverse" then
+                    S.reverseT = REVERSE_TIME
+                elseif kind.id == "hurt" then
+                    S.lives = math.max(1, S.lives - 1)
+                    updateStatus()
                 elseif kind.id == "shrink" then
                     PADDLE_W = S.diff.paddle * 0.7
                     S.wideT = SHRINK_TIME
@@ -4635,7 +4678,7 @@ end)()
                     if b.stroke then b.stroke:Destroy(); b.stroke = nil end
                     if b.frame then b.frame.BackgroundTransparency = 0.45 end
                     S.speed = math.min(S.speed * 1.008, MAX_SPEED)
-                    normalizeVelocity()
+                    normalizeAll()
                     return
                 end
                 b.alive = false
@@ -4644,71 +4687,76 @@ end)()
                 S.alive = S.alive - 1
                 S.score = S.score + b.pts * (S.doubleT > 0 and 2 or 1)
                 S.speed = math.min(S.speed * 1.008, MAX_SPEED)
-                normalizeVelocity()
+                normalizeAll()
                 updateStatus()
             end
 
             -- خطوة فيزياء وحدة صغيرة (تقسيم الحركة يمنع الكرة من اختراق الطوب أو المضرب)
-            local function physicsStep(h)
+            local function physicsStep(h, B)
                 -- محور X
-                local nx = S.bx + S.vx * h
-                local hit = brickAt(nx, S.by)
+                local nx = B.bx + B.vx * h
+                local hit = brickAt(nx, B.by)
                 if hit then
                     if S.fireT > 0 then hit.hp = 1 end
                     breakBrick(hit)
-                    if S.fireT > 0 then S.bx = nx else S.vx = -S.vx end
+                    if S.fireT > 0 then B.bx = nx else B.vx = -B.vx end
                     if S.alive <= 0 then return "cleared" end
                 else
-                    S.bx = nx
+                    B.bx = nx
                 end
-                if S.bx < WALL + BALL_R then
-                    S.bx = WALL + BALL_R
-                    S.vx = math.abs(S.vx)
-                elseif S.bx > W - WALL - BALL_R then
-                    S.bx = W - WALL - BALL_R
-                    S.vx = -math.abs(S.vx)
+                if B.bx < WALL + BALL_R then
+                    B.bx = WALL + BALL_R
+                    B.vx = math.abs(B.vx)
+                elseif B.bx > W - WALL - BALL_R then
+                    B.bx = W - WALL - BALL_R
+                    B.vx = -math.abs(B.vx)
                 end
 
                 -- محور Y
-                local ny = S.by + S.vy * h
-                hit = brickAt(S.bx, ny)
+                local ny = B.by + B.vy * h
+                hit = brickAt(B.bx, ny)
                 if hit then
                     if S.fireT > 0 then hit.hp = 1 end
                     breakBrick(hit)
-                    if S.fireT > 0 then S.by = ny else S.vy = -S.vy end
+                    if S.fireT > 0 then B.by = ny else B.vy = -B.vy end
                     if S.alive <= 0 then return "cleared" end
                 else
-                    S.by = ny
+                    B.by = ny
                 end
-                if S.by < WALL + BALL_R then
-                    S.by = WALL + BALL_R
-                    S.vy = math.abs(S.vy)
+                if B.by < WALL + BALL_R then
+                    B.by = WALL + BALL_R
+                    B.vy = math.abs(B.vy)
                 end
 
                 -- المضرب: الزاوية تعتمد على مكان الضربة (الأطراف = زاوية أكبر)
-                if S.vy > 0
-                    and S.by + BALL_R >= PADDLE_Y and S.by + BALL_R <= PADDLE_Y + PADDLE_H + 6
-                    and S.bx >= S.px - PADDLE_W / 2 - BALL_R and S.bx <= S.px + PADDLE_W / 2 + BALL_R then
-                    S.by = PADDLE_Y - BALL_R
-                    local rel = math.clamp((S.bx - S.px) / (PADDLE_W / 2 + BALL_R), -1, 1)
-                    setVelocity(rel * math.rad(62))
+                if B.vy > 0
+                    and B.by + BALL_R >= PADDLE_Y and B.by + BALL_R <= PADDLE_Y + PADDLE_H + 6
+                    and B.bx >= S.px - PADDLE_W / 2 - BALL_R and B.bx <= S.px + PADDLE_W / 2 + BALL_R then
+                    B.by = PADDLE_Y - BALL_R
+                    local rel = math.clamp((B.bx - S.px) / (PADDLE_W / 2 + BALL_R), -1, 1)
+                    setVelocity(B, rel * math.rad(62))
                 end
 
-                if S.shield and S.vy > 0 and S.by + BALL_R >= H - 8 then
+                if S.shield and B.vy > 0 and B.by + BALL_R >= H - 8 then
                     S.shield = false
                     shieldLine.Visible = false
-                    S.by = H - 8 - BALL_R
-                    S.vy = -math.abs(S.vy)
+                    B.by = H - 8 - BALL_R
+                    B.vy = -math.abs(B.vy)
                     return nil
                 end
-                if S.by - BALL_R > H then return "lost" end
+                if B.by - BALL_R > H then return "lost" end
                 return nil
             end
 
             local function render()
                 place(paddle, S.px - PADDLE_W / 2, PADDLE_Y, PADDLE_W, PADDLE_H)
                 place(ball, S.bx - BALL_R, S.by - BALL_R, BALL_R * 2, BALL_R * 2)
-                ball.BackgroundColor3 = (S.fireT > 0) and Color3.fromRGB(255, 140, 40) or Color3.new(1, 1, 1)
+                local bc = (S.fireT > 0) and Color3.fromRGB(255, 140, 40) or Color3.new(1, 1, 1)
+                ball.BackgroundColor3 = bc
+                for _, e in ipairs(S.extra) do
+                    place(e.frame, e.bx - BALL_R, e.by - BALL_R, BALL_R * 2, BALL_R * 2)
+                    e.frame.BackgroundColor3 = bc
+                end
             end
 
             -- ===== التحكم =====
@@ -4716,6 +4764,7 @@ end)()
                 local ap, as = field.AbsolutePosition.X, field.AbsoluteSize.X
                 if as <= 0 then return end
                 local lx = (xPixel - ap) / as * W
+                if S.reverseT > 0 then lx = W - lx end
                 S.px = math.clamp(lx, WALL + PADDLE_W / 2, W - WALL - PADDLE_W / 2)
             end
 
@@ -4778,7 +4827,7 @@ end)()
                 dt = math.min(dt, 1 / 30)
 
                 if S.dir ~= 0 then
-                    S.px = math.clamp(S.px + S.dir * PADDLE_SPEED * dt,
+                    S.px = math.clamp(S.px + S.dir * (S.reverseT > 0 and -1 or 1) * PADDLE_SPEED * dt,
                         WALL + PADDLE_W / 2, W - WALL - PADDLE_W / 2)
                 end
 
@@ -4789,7 +4838,16 @@ end)()
                     local steps = math.clamp(math.ceil(dist / 3), 1, 12)
                     local h = dt / steps
                     for _ = 1, steps do
-                        local result = physicsStep(h)
+                        if S.state ~= "playing" then break end
+                        -- الكرة الرئيسية
+                        local result = physicsStep(h, S)
+                        if result == "lost" and #S.extra > 0 then
+                            -- طاحت الرئيسية وفي كرات ثانية: وحدة منها تصير الرئيسية
+                            local e = table.remove(S.extra, 1)
+                            S.bx, S.by, S.vx, S.vy = e.bx, e.by, e.vx, e.vy
+                            if e.frame then e.frame:Destroy() end
+                            result = nil
+                        end
                         if result == "cleared" then
                             nextLevel()
                             break
@@ -4797,6 +4855,21 @@ end)()
                             loseLife()
                             break
                         end
+                        -- الكرات الإضافية
+                        local stop = false
+                        for i = #S.extra, 1, -1 do
+                            local e = S.extra[i]
+                            local r = physicsStep(h, e)
+                            if r == "cleared" then
+                                nextLevel()
+                                stop = true
+                                break
+                            elseif r == "lost" then
+                                if e.frame then e.frame:Destroy() end
+                                table.remove(S.extra, i)
+                            end
+                        end
+                        if stop then break end
                     end
                     if S.state == "playing" then
                         if S.wideT > 0 then
@@ -4808,6 +4881,7 @@ end)()
                         end
                         if S.fireT > 0 then S.fireT = S.fireT - dt end
                         if S.doubleT > 0 then S.doubleT = S.doubleT - dt end
+                        if S.reverseT > 0 then S.reverseT = S.reverseT - dt end
                         for i = #S.drops, 1, -1 do
                             local d = S.drops[i]
                             d.y = d.y + DROP_SPEED * dt
@@ -19264,7 +19338,7 @@ end)
 - 🏰 دفاع البيت: حملة عوالم ومراحل، كل مرحلة فيها 3 بوسات. الكائنات تشتريها من المتجر مرة وحدة وتنحفظ، والفلوس تجي من مكافآت البوسات. فيه لوحة متصدرين.
 - 🧩 لعبة الأرقام: 3 مستويات (سهل 3×2، صعب 3×3، مستحيل 4×4)، فيها مساعد تلقائي وحد للحركات.
 - 🃏 تطابق البطاقات: اكشف بطاقتين متشابهتين من بين 18 بطاقة.
-- 🧱 تكسير الطوب: كرة ومضرب، 4 صعوبات (سهل، متوسط، صعب، مستحيل) وكل صعوبة 3 مراحل، المرحلة الأولى مفتوحة والباقي ينفتح بعد ما تخلص اللي قبله، والطوب ذو الإطار الأبيض يحتاج ضربتين، وأحياناً تنزل جوائز (توسيع المضرب، إبطاء الكرة، محاولة زيادة، كرة نارية، نقاط مضاعفة، درع، وواحدة سيئة تصغّر المضرب) والمضرب لازم يلمسها. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
+- 🧱 تكسير الطوب: كرة ومضرب، 4 صعوبات (سهل، متوسط، صعب، مستحيل) وكل صعوبة 3 مراحل، المرحلة الأولى مفتوحة والباقي ينفتح بعد ما تخلص اللي قبله، والطوب ذو الإطار الأبيض يحتاج ضربتين، وأحياناً تنزل جوائز (توسيع المضرب، إبطاء الكرة، محاولة زيادة، كرة نارية، نقاط مضاعفة، درع، وكرات ثلاث، وجوائز سيئة: تصغير المضرب، كرة أسرع، تحكم معكوس، خسارة محاولة) والمضرب لازم يلمسها. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
 - 🧮 تحدي الرياضيات: لعبة أسئلة حساب.
 أسئلة الألعاب: لو سأل عن لعبة بشكل عام (وش هي، كيف ألعبها) جاوب في 3 أو 4 أسطر بس: الفكرة والهدف وأهم زر. ولو سأل عن تفصيلة (مثل كيف أفتح الدولاب أو وين البطاريات) جاوب عن التفصيلة بس.
 
