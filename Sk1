@@ -5990,22 +5990,6 @@ dP7xrb0TUdQN/HmeTt/EfauWb7sf0rc0P/j/AI/w/pQJH6n/ALBOnafrvxItoNcgjvEF8PlnUSDgccMD
         mathPointSound.Looped = false
         mathPointSound.Parent = game:GetService("SoundService")
 
-        -- صوت الفوز في ألعاب تاب الرياضيات
-        local mathWinSound = Instance.new("Sound")
-        mathWinSound.Name = "MathVictorySound"
-        mathWinSound.SoundId = "rbxassetid://72631772042241"
-        mathWinSound.Volume = 0.85
-        mathWinSound.Looped = false
-        mathWinSound.Parent = game:GetService("SoundService")
-
-        local function playMathWinSound()
-            pcall(function()
-                mathWinSound:Stop()
-                mathWinSound.TimePosition = 0
-                mathWinSound:Play()
-            end)
-        end
-
         local function showMathWrongImage()
             if mathErrorTween then pcall(function() mathErrorTween:Cancel() end) end
 
@@ -6800,7 +6784,6 @@ dP7xrb0TUdQN/HmeTt/EfauWb7sf0rc0P/j/AI/w/pQJH6n/ALBOnafrvxItoNcgjvEF8PlnUSDgccMD
                 won = true
                 stopHelper()
                 if _G.SkyGameAudio then _G.SkyGameAudio.End("puzzle") end
-                playMathWinSound()
                 info.Text = "🎉 فزت: " .. moves
                 for _, t in pairs(tiles) do
                     TweenService:Create(t, TweenInfo.new(0.3), {BackgroundColor3 = Color3.fromRGB(60, 200, 120)}):Play()
