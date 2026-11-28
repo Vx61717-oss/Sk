@@ -4023,7 +4023,7 @@ end)()
         desc.TextSize = 12
         desc.TextColor3 = Color3.fromRGB(190, 190, 200)
         desc.TextXAlignment = Enum.TextXAlignment.Right
-        desc.Text = "حرّك المضرب وكسّر كل الطوب بالكرة • 3 محاولات ومستويات"
+        desc.Text = "حرّك المضرب وكسّر كل الطوب • 4 صعوبات، وكل صعوبة 3 مراحل"
         desc.ZIndex = 8
         desc.Parent = section
 
@@ -4067,6 +4067,20 @@ end)()
             Color3.fromRGB(210, 90, 150),
         }
         local BRICK_POINTS = {7, 5, 3, 1, 1, 1, 1, 1}
+
+        -- ===== مستويات الصعوبة: كل صعوبة فيها 3 مراحل =====
+        -- rows = عدد صفوف الطوب بكل مرحلة، tough = كم صف من فوق يحتاج ضربتين (يظهر بإطار أبيض)
+        local STAGES = 3
+        local DIFFS = {
+            { name = "سهل",    color = Color3.fromRGB(60, 160, 80),  lives = 5, paddle = 130, speed = 300, maxSpeed = 480,
+              rows = {3, 4, 5}, tough = {0, 0, 0} },
+            { name = "متوسط",  color = Color3.fromRGB(210, 150, 40), lives = 3, paddle = 104, speed = 340, maxSpeed = 600,
+              rows = {4, 5, 6}, tough = {0, 0, 1} },
+            { name = "صعب",    color = Color3.fromRGB(200, 60, 50),  lives = 3, paddle = 80,  speed = 400, maxSpeed = 720,
+              rows = {5, 6, 7}, tough = {1, 2, 3} },
+            { name = "مستحيل", color = Color3.fromRGB(130, 40, 190), lives = 1, paddle = 60,  speed = 480, maxSpeed = 860,
+              rows = {6, 7, 8}, tough = {2, 3, 4} },
+        }
 
         local overlay, conns, gameToken
         local bestScore = 0
@@ -4238,11 +4252,13 @@ end)()
                 speed = START_SPEED,
                 bricks = {}, alive = 0,
                 dir = 0, dragging = false,
+                diff = DIFFS[2], stage = 1,
             }
+            local menu -- قائمة اختيار الصعوبة (تنبني تحت)
 
             local function updateStatus()
-                status.Text = string.format("النقاط %04d   |   المستوى %d   |   ❤ %d   |   الأفضل %04d",
-                    S.score, S.level, S.lives, math.max(bestScore, S.score))
+                status.Text = string.format("النقاط %04d   |   %s • المرحلة %d/%d   |   ❤ %d   |   الأفضل %04d",
+                    S.score, S.diff.name, S.stage, STAGES, S.lives, math.max(bestScore, S.score))
             end
 
             local function showMsg(text)
@@ -4259,7 +4275,8 @@ end)()
 
             local function buildBricks()
                 clearBricks()
-                local rows = math.min(3 + S.level, #BRICK_COLORS) -- مستوى 1 = 4 صفوف مثل أتاري
+                local rows = math.min(S.diff.rows[S.stage], #BRICK_COLORS)
+                local toughRows = S.diff.tough[S.stage]
                 local bw = (W - WALL * 2) / COLS
                 for r = 1, rows do
                     for c = 1, COLS do
@@ -4267,9 +4284,16 @@ end)()
                         local y = BRICK_TOP + (r - 1) * BRICK_H + BRICK_GAP / 2
                         local w, h = bw - BRICK_GAP, BRICK_H - BRICK_GAP
                         local f = box(BRICK_COLORS[r], x, y, w, h, 12005)
+                        local hp = (r <= toughRows) and 2 or 1
+                        local stroke
+                        if hp > 1 then
+                            stroke = Instance.new("UIStroke", f)
+                            stroke.Color = Color3.new(1, 1, 1)
+                            stroke.Thickness = 1.5
+                        end
                         S.bricks[#S.bricks + 1] = {
-                            x = x, y = y, w = w, h = h, frame = f,
-                            pts = BRICK_POINTS[r] or 1, alive = true,
+                            x = x, y = y, w = w, h = h, frame = f, stroke = stroke,
+                            pts = (BRICK_POINTS[r] or 1) * hp, hp = hp, alive = true,
                         }
                         S.alive = S.alive + 1
                     end
@@ -4301,14 +4325,17 @@ end)()
                 S.bx, S.by = S.px, PADDLE_Y - BALL_R
             end
 
-            local function newGame()
-                S.score, S.lives, S.level = 0, 3, 1
+            local function newGame(diff)
+                S.diff = diff
+                PADDLE_W, START_SPEED, MAX_SPEED = diff.paddle, diff.speed, diff.maxSpeed
+                S.score, S.lives, S.stage = 0, diff.lives, 1
                 S.speed = START_SPEED
                 S.px = W / 2
                 buildBricks()
                 resetBall()
                 updateStatus()
-                showMsg("المس الشاشة لإطلاق الكرة\nحرّك إصبعك لتحريك المضرب")
+                if menu then menu.Visible = false end
+                showMsg("المرحلة 1 من " .. STAGES .. " • " .. diff.name .. "\nالمس الشاشة لإطلاق الكرة\nحرّك إصبعك لتحريك المضرب")
             end
 
             local function launch()
@@ -4324,7 +4351,7 @@ end)()
                 S.vx, S.vy = 0, 0
                 if S.score > bestScore then bestScore = S.score end
                 updateStatus()
-                showMsg("انتهت اللعبة!\nالنقاط: " .. S.score .. "\nالمس الشاشة للإعادة")
+                showMsg("انتهت اللعبة!\nالنقاط: " .. S.score .. "\nالمس الشاشة لاختيار الصعوبة")
             end
 
             local function loseLife()
@@ -4339,12 +4366,76 @@ end)()
             end
 
             local function nextLevel()
-                S.level = S.level + 1
-                S.speed = math.min(START_SPEED + (S.level - 1) * 30, MAX_SPEED)
+                if S.stage >= STAGES then
+                    -- خلّصت المراحل الثلاث
+                    S.state = "won"
+                    S.vx, S.vy = 0, 0
+                    if S.score > bestScore then bestScore = S.score end
+                    updateStatus()
+                    showMsg("🏆 أنهيت مستوى " .. S.diff.name .. "!\nالنقاط: " .. S.score .. "\nالمس الشاشة لاختيار الصعوبة")
+                    return
+                end
+                S.stage = S.stage + 1
+                S.speed = math.min(START_SPEED + (S.stage - 1) * 25, MAX_SPEED)
                 buildBricks()
                 resetBall()
                 updateStatus()
-                showMsg("🎉 المستوى " .. S.level .. "!\nالمس الشاشة للإطلاق")
+                showMsg("🎉 المرحلة " .. S.stage .. " من " .. STAGES .. "\nالمس الشاشة للإطلاق")
+            end
+
+            -- قائمة اختيار الصعوبة
+            menu = Instance.new("Frame")
+            menu.Name = "DifficultyMenu"
+            menu.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
+            menu.BorderSizePixel = 0
+            menu.Position = UDim2.new(0, 6, 0, 68)
+            menu.Size = UDim2.new(1, -12, 1, -74)
+            menu.ZIndex = 12012
+            menu.Visible = false
+            menu.Parent = panel
+            Instance.new("UICorner", menu).CornerRadius = UDim.new(0, 10)
+
+            local menuTitle = Instance.new("TextLabel")
+            menuTitle.BackgroundTransparency = 1
+            menuTitle.AnchorPoint = Vector2.new(0.5, 0)
+            menuTitle.Position = UDim2.fromScale(0.5, 0.06)
+            menuTitle.Size = UDim2.fromScale(0.8, 0.16)
+            menuTitle.Font = Enum.Font.GothamBold
+            menuTitle.TextScaled = true
+            menuTitle.TextColor3 = Color3.new(1, 1, 1)
+            menuTitle.Text = "اختر الصعوبة • كل صعوبة 3 مراحل"
+            menuTitle.ZIndex = 12013
+            menuTitle.Parent = menu
+
+            for i, d in ipairs(DIFFS) do
+                local b = Instance.new("TextButton")
+                b.Position = UDim2.fromScale(0.02 + (#DIFFS - i) * 0.245, 0.3)
+                b.Size = UDim2.fromScale(0.225, 0.58)
+                b.BackgroundColor3 = d.color
+                b.BorderSizePixel = 0
+                b.AutoButtonColor = true
+                b.Font = Enum.Font.GothamBold
+                b.TextScaled = true
+                b.TextWrapped = true
+                b.TextColor3 = Color3.new(1, 1, 1)
+                b.Text = d.name .. "\n" .. STAGES .. " مراحل\n❤ " .. d.lives
+                b.ZIndex = 12014
+                b.Parent = menu
+                Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)
+                local bp = Instance.new("UIPadding", b)
+                bp.PaddingLeft, bp.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+                bp.PaddingTop, bp.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+                add(b.MouseButton1Click:Connect(function()
+                    if S.state == "menu" then newGame(d) end
+                end))
+            end
+
+            local function showMenu()
+                clearBricks()
+                S.state = "menu"
+                S.vx, S.vy = 0, 0
+                msg.Visible = false
+                menu.Visible = true
             end
 
             -- يرجع الطوبة اللي تتقاطع مع الكرة عند الموضع (x, y)
@@ -4360,6 +4451,15 @@ end)()
             end
 
             local function breakBrick(b)
+                b.hp = b.hp - 1
+                if b.hp > 0 then
+                    -- طوبة قوية: أول ضربة تضعفها بس
+                    if b.stroke then b.stroke:Destroy(); b.stroke = nil end
+                    if b.frame then b.frame.BackgroundTransparency = 0.45 end
+                    S.speed = math.min(S.speed * 1.008, MAX_SPEED)
+                    normalizeVelocity()
+                    return
+                end
                 b.alive = false
                 if b.frame then b.frame:Destroy(); b.frame = nil end
                 S.alive = S.alive - 1
@@ -4433,8 +4533,8 @@ end)()
             local function tapAction()
                 if S.state == "ready" then
                     launch()
-                elseif S.state == "over" then
-                    newGame()
+                elseif S.state == "over" or S.state == "won" then
+                    showMenu()
                 end
             end
 
@@ -4517,7 +4617,7 @@ end)()
                 if not overlay or not overlay.Parent then closeGame() end
             end))
 
-            newGame()
+            showMenu()
             render()
         end
 
@@ -18950,7 +19050,7 @@ end)
 - 🏰 دفاع البيت: حملة عوالم ومراحل، كل مرحلة فيها 3 بوسات. الكائنات تشتريها من المتجر مرة وحدة وتنحفظ، والفلوس تجي من مكافآت البوسات. فيه لوحة متصدرين.
 - 🧩 لعبة الأرقام: 3 مستويات (سهل 3×2، صعب 3×3، مستحيل 4×4)، فيها مساعد تلقائي وحد للحركات.
 - 🃏 تطابق البطاقات: اكشف بطاقتين متشابهتين من بين 18 بطاقة.
-- 🧱 تكسير الطوب: كرة ومضرب، تكسر كل الطوب الملون وعندك 3 محاولات، وكل مستوى أسرع وفيه صفوف أكثر. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
+- 🧱 تكسير الطوب: كرة ومضرب، 4 صعوبات (سهل، متوسط، صعب، مستحيل) وكل صعوبة 3 مراحل، وكل مرحلة أسرع وفيها صفوف أكثر، والطوب ذو الإطار الأبيض يحتاج ضربتين. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
 - 🧮 تحدي الرياضيات: لعبة أسئلة حساب.
 أسئلة الألعاب: لو سأل عن لعبة بشكل عام (وش هي، كيف ألعبها) جاوب في 3 أو 4 أسطر بس: الفكرة والهدف وأهم زر. ولو سأل عن تفصيلة (مثل كيف أفتح الدولاب أو وين البطاريات) جاوب عن التفصيلة بس.
 
