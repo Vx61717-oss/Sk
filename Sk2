@@ -4071,6 +4071,20 @@ end)()
         -- ===== مستويات الصعوبة: كل صعوبة فيها 3 مراحل =====
         -- rows = عدد صفوف الطوب بكل مرحلة، tough = كم صف من فوق يحتاج ضربتين (يظهر بإطار أبيض)
         local STAGES = 3
+        -- ===== الجوائز: لما تنكسر طوبة ممكن تنزل جائزة والمضرب لازم يلمسها =====
+        local DROP_CHANCE = {0.25, 0.20, 0.15, 0.10} -- حسب الصعوبة (سهل ← مستحيل)
+        local DROP_SPEED, DROP_W, DROP_H = 130, 30, 16
+        local WIDE_TIME, WIDE_MULT = 12, 1.5
+        local FIRE_TIME, DOUBLE_TIME, SHRINK_TIME = 8, 12, 10
+        local DROP_KINDS = {
+            { id = "wide",   sym = "↔",  color = Color3.fromRGB(50, 150, 220), weight = 25, text = "المضرب صار أعرض!" },
+            { id = "slow",   sym = "🐢", color = Color3.fromRGB(60, 160, 80),  weight = 20, text = "الكرة أبطأ!" },
+            { id = "life",   sym = "❤",  color = Color3.fromRGB(200, 55, 70),  weight = 8,  text = "+1 محاولة!" },
+            { id = "fire",   sym = "🔥", color = Color3.fromRGB(215, 110, 30), weight = 15, text = "كرة نارية! تخترق الطوب" },
+            { id = "double", sym = "x2", color = Color3.fromRGB(215, 185, 40), weight = 15, text = "نقاط مضاعفة!" },
+            { id = "shield", sym = "🛡", color = Color3.fromRGB(70, 190, 210), weight = 10, text = "درع! ينقذك مرة وحدة" },
+            { id = "shrink", sym = "💀", color = Color3.fromRGB(110, 40, 140), weight = 7,  text = "انتبه! المضرب صار أصغر" },
+        }
         local unlocked = {1, 1, 1, 1} -- آخر مرحلة مفتوحة لكل صعوبة، تبدأ بالمرحلة 1 بس
         local DIFFS = {
             { name = "سهل",    color = Color3.fromRGB(60, 160, 80),  lives = 5, paddle = 130, speed = 300, maxSpeed = 480,
@@ -4211,6 +4225,8 @@ end)()
             Instance.new("UICorner", paddle).CornerRadius = UDim.new(0, 3)
             local ball = box(Color3.fromRGB(255, 255, 255), 0, 0, BALL_R * 2, BALL_R * 2, 12007)
             Instance.new("UICorner", ball).CornerRadius = UDim.new(1, 0)
+            local shieldLine = box(Color3.fromRGB(80, 200, 255), WALL, H - 8, W - WALL * 2, 4, 12004)
+            shieldLine.Visible = false
 
             -- رسالة وسط الملعب
             local msg = Instance.new("TextLabel")
@@ -4230,6 +4246,24 @@ end)()
             local msgPad = Instance.new("UIPadding", msg)
             msgPad.PaddingLeft, msgPad.PaddingRight = UDim.new(0, 10), UDim.new(0, 10)
             msgPad.PaddingTop, msgPad.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+
+            local toast = Instance.new("TextLabel")
+            toast.AnchorPoint = Vector2.new(0.5, 0)
+            toast.Position = UDim2.fromScale(0.5, 0.1)
+            toast.Size = UDim2.fromScale(0.4, 0.09)
+            toast.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
+            toast.BackgroundTransparency = 0.2
+            toast.BorderSizePixel = 0
+            toast.Font = Enum.Font.GothamBold
+            toast.TextColor3 = Color3.new(1, 1, 1)
+            toast.TextScaled = true
+            toast.ZIndex = 12009
+            toast.Visible = false
+            toast.Parent = field
+            Instance.new("UICorner", toast).CornerRadius = UDim.new(0, 8)
+            local toastPad = Instance.new("UIPadding", toast)
+            toastPad.PaddingLeft, toastPad.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
+            toastPad.PaddingTop, toastPad.PaddingBottom = UDim.new(0, 4), UDim.new(0, 4)
 
             -- منطقة لمس شفافة تغطي كل اللوحة، فالإصبع الكبير ما يغطي المضرب ويتحكم من أي مكان
             local zone = Instance.new("TextButton")
@@ -4253,7 +4287,7 @@ end)()
                 speed = START_SPEED,
                 bricks = {}, alive = 0,
                 dir = 0, dragging = false,
-                diff = DIFFS[2], diffIdx = 2, stage = 1,
+                diff = DIFFS[2], diffIdx = 2, stage = 1, drops = {}, wideT = 0, toastId = 0, fireT = 0, doubleT = 0, shield = false,
             }
             local menu -- قائمة اختيار الصعوبة (تنبني تحت)
 
@@ -4267,7 +4301,15 @@ end)()
                 msg.Visible = true
             end
 
+            local function clearDrops()
+                for _, d in ipairs(S.drops) do
+                    if d.frame then d.frame:Destroy() end
+                end
+                S.drops = {}
+            end
+
             local function clearBricks()
+                clearDrops()
                 for _, b in ipairs(S.bricks) do
                     if b.frame then b.frame:Destroy() end
                 end
@@ -4321,6 +4363,7 @@ end)()
             end
 
             local function resetBall()
+                clearDrops()
                 S.state = "ready"
                 S.vx, S.vy = 0, 0
                 S.bx, S.by = S.px, PADDLE_Y - BALL_R
@@ -4331,6 +4374,8 @@ end)()
                 S.diff, S.diffIdx = diff, idx
                 PADDLE_W, START_SPEED, MAX_SPEED = diff.paddle, diff.speed, diff.maxSpeed
                 S.score, S.lives, S.stage = 0, diff.lives, stage or 1
+                S.wideT, S.fireT, S.doubleT, S.shield = 0, 0, 0, false
+                shieldLine.Visible = false
                 S.speed = math.min(START_SPEED + (S.stage - 1) * 25, MAX_SPEED)
                 S.px = W / 2
                 buildBricks()
@@ -4504,6 +4549,8 @@ end)()
             local function showMenu()
                 clearBricks()
                 S.state = "menu"
+                S.shield = false
+                shieldLine.Visible = false
                 S.vx, S.vy = 0, 0
                 msg.Visible = false
                 menu.Visible = true
@@ -4522,6 +4569,65 @@ end)()
                 return nil
             end
 
+            local function spawnDrop(b)
+                if math.random() > (DROP_CHANCE[S.diffIdx] or 0.15) then return end
+                local roll, kind = math.random(1, 100), nil
+                local acc = 0
+                for _, k in ipairs(DROP_KINDS) do
+                    acc = acc + k.weight
+                    if roll <= acc then kind = k break end
+                end
+                kind = kind or DROP_KINDS[1]
+                local cx, cy = b.x + b.w / 2, b.y + b.h / 2
+                local f = box(kind.color, cx - DROP_W / 2, cy - DROP_H / 2, DROP_W, DROP_H, 12006)
+                Instance.new("UICorner", f).CornerRadius = UDim.new(0, 5)
+                local st = Instance.new("UIStroke", f)
+                st.Color = Color3.new(1, 1, 1)
+                st.Thickness = 1.2
+                local t = Instance.new("TextLabel")
+                t.BackgroundTransparency = 1
+                t.Size = UDim2.fromScale(1, 1)
+                t.Font = Enum.Font.GothamBold
+                t.TextScaled = true
+                t.TextColor3 = Color3.new(1, 1, 1)
+                t.Text = kind.sym
+                t.ZIndex = 12007
+                t.Parent = f
+                S.drops[#S.drops + 1] = { x = cx, y = cy, kind = kind, frame = f }
+            end
+
+            local function applyDrop(kind)
+                if kind.id == "wide" then
+                    PADDLE_W = S.diff.paddle * WIDE_MULT
+                    S.wideT = WIDE_TIME
+                    S.px = math.clamp(S.px, WALL + PADDLE_W / 2, W - WALL - PADDLE_W / 2)
+                elseif kind.id == "slow" then
+                    S.speed = math.max(S.speed * 0.78, START_SPEED * 0.7)
+                    normalizeVelocity()
+                elseif kind.id == "life" then
+                    S.lives = S.lives + 1
+                    updateStatus()
+                elseif kind.id == "fire" then
+                    S.fireT = FIRE_TIME
+                elseif kind.id == "double" then
+                    S.doubleT = DOUBLE_TIME
+                elseif kind.id == "shield" then
+                    S.shield = true
+                    shieldLine.Visible = true
+                elseif kind.id == "shrink" then
+                    PADDLE_W = S.diff.paddle * 0.7
+                    S.wideT = SHRINK_TIME
+                    S.px = math.clamp(S.px, WALL + PADDLE_W / 2, W - WALL - PADDLE_W / 2)
+                end
+                S.toastId = S.toastId + 1
+                local id = S.toastId
+                toast.Text = kind.text
+                toast.Visible = true
+                task.delay(1.4, function()
+                    if S.toastId == id and toast.Parent then toast.Visible = false end
+                end)
+            end
+
             local function breakBrick(b)
                 b.hp = b.hp - 1
                 if b.hp > 0 then
@@ -4534,8 +4640,9 @@ end)()
                 end
                 b.alive = false
                 if b.frame then b.frame:Destroy(); b.frame = nil end
+                spawnDrop(b)
                 S.alive = S.alive - 1
-                S.score = S.score + b.pts
+                S.score = S.score + b.pts * (S.doubleT > 0 and 2 or 1)
                 S.speed = math.min(S.speed * 1.008, MAX_SPEED)
                 normalizeVelocity()
                 updateStatus()
@@ -4547,8 +4654,9 @@ end)()
                 local nx = S.bx + S.vx * h
                 local hit = brickAt(nx, S.by)
                 if hit then
+                    if S.fireT > 0 then hit.hp = 1 end
                     breakBrick(hit)
-                    S.vx = -S.vx
+                    if S.fireT > 0 then S.bx = nx else S.vx = -S.vx end
                     if S.alive <= 0 then return "cleared" end
                 else
                     S.bx = nx
@@ -4565,8 +4673,9 @@ end)()
                 local ny = S.by + S.vy * h
                 hit = brickAt(S.bx, ny)
                 if hit then
+                    if S.fireT > 0 then hit.hp = 1 end
                     breakBrick(hit)
-                    S.vy = -S.vy
+                    if S.fireT > 0 then S.by = ny else S.vy = -S.vy end
                     if S.alive <= 0 then return "cleared" end
                 else
                     S.by = ny
@@ -4585,6 +4694,13 @@ end)()
                     setVelocity(rel * math.rad(62))
                 end
 
+                if S.shield and S.vy > 0 and S.by + BALL_R >= H - 8 then
+                    S.shield = false
+                    shieldLine.Visible = false
+                    S.by = H - 8 - BALL_R
+                    S.vy = -math.abs(S.vy)
+                    return nil
+                end
                 if S.by - BALL_R > H then return "lost" end
                 return nil
             end
@@ -4592,6 +4708,7 @@ end)()
             local function render()
                 place(paddle, S.px - PADDLE_W / 2, PADDLE_Y, PADDLE_W, PADDLE_H)
                 place(ball, S.bx - BALL_R, S.by - BALL_R, BALL_R * 2, BALL_R * 2)
+                ball.BackgroundColor3 = (S.fireT > 0) and Color3.fromRGB(255, 140, 40) or Color3.new(1, 1, 1)
             end
 
             -- ===== التحكم =====
@@ -4679,6 +4796,31 @@ end)()
                         elseif result == "lost" then
                             loseLife()
                             break
+                        end
+                    end
+                    if S.state == "playing" then
+                        if S.wideT > 0 then
+                            S.wideT = S.wideT - dt
+                            if S.wideT <= 0 then
+                                PADDLE_W = S.diff.paddle
+                                S.px = math.clamp(S.px, WALL + PADDLE_W / 2, W - WALL - PADDLE_W / 2)
+                            end
+                        end
+                        if S.fireT > 0 then S.fireT = S.fireT - dt end
+                        if S.doubleT > 0 then S.doubleT = S.doubleT - dt end
+                        for i = #S.drops, 1, -1 do
+                            local d = S.drops[i]
+                            d.y = d.y + DROP_SPEED * dt
+                            place(d.frame, d.x - DROP_W / 2, d.y - DROP_H / 2, DROP_W, DROP_H)
+                            if d.y + DROP_H / 2 >= PADDLE_Y and d.y - DROP_H / 2 <= PADDLE_Y + PADDLE_H
+                                and math.abs(d.x - S.px) <= PADDLE_W / 2 + DROP_W / 2 then
+                                applyDrop(d.kind)
+                                d.frame:Destroy()
+                                table.remove(S.drops, i)
+                            elseif d.y - DROP_H / 2 > H then
+                                d.frame:Destroy()
+                                table.remove(S.drops, i)
+                            end
                         end
                     end
                 end
@@ -19122,7 +19264,7 @@ end)
 - 🏰 دفاع البيت: حملة عوالم ومراحل، كل مرحلة فيها 3 بوسات. الكائنات تشتريها من المتجر مرة وحدة وتنحفظ، والفلوس تجي من مكافآت البوسات. فيه لوحة متصدرين.
 - 🧩 لعبة الأرقام: 3 مستويات (سهل 3×2، صعب 3×3، مستحيل 4×4)، فيها مساعد تلقائي وحد للحركات.
 - 🃏 تطابق البطاقات: اكشف بطاقتين متشابهتين من بين 18 بطاقة.
-- 🧱 تكسير الطوب: كرة ومضرب، 4 صعوبات (سهل، متوسط، صعب، مستحيل) وكل صعوبة 3 مراحل، المرحلة الأولى مفتوحة والباقي ينفتح بعد ما تخلص اللي قبله، والطوب ذو الإطار الأبيض يحتاج ضربتين. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
+- 🧱 تكسير الطوب: كرة ومضرب، 4 صعوبات (سهل، متوسط، صعب، مستحيل) وكل صعوبة 3 مراحل، المرحلة الأولى مفتوحة والباقي ينفتح بعد ما تخلص اللي قبله، والطوب ذو الإطار الأبيض يحتاج ضربتين، وأحياناً تنزل جوائز (توسيع المضرب، إبطاء الكرة، محاولة زيادة، كرة نارية، نقاط مضاعفة، درع، وواحدة سيئة تصغّر المضرب) والمضرب لازم يلمسها. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
 - 🧮 تحدي الرياضيات: لعبة أسئلة حساب.
 أسئلة الألعاب: لو سأل عن لعبة بشكل عام (وش هي، كيف ألعبها) جاوب في 3 أو 4 أسطر بس: الفكرة والهدف وأهم زر. ولو سأل عن تفصيلة (مثل كيف أفتح الدولاب أو وين البطاريات) جاوب عن التفصيلة بس.
 
