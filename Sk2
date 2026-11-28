@@ -4071,6 +4071,7 @@ end)()
         -- ===== مستويات الصعوبة: كل صعوبة فيها 3 مراحل =====
         -- rows = عدد صفوف الطوب بكل مرحلة، tough = كم صف من فوق يحتاج ضربتين (يظهر بإطار أبيض)
         local STAGES = 3
+        local unlocked = {1, 1, 1, 1} -- آخر مرحلة مفتوحة لكل صعوبة، تبدأ بالمرحلة 1 بس
         local DIFFS = {
             { name = "سهل",    color = Color3.fromRGB(60, 160, 80),  lives = 5, paddle = 130, speed = 300, maxSpeed = 480,
               rows = {3, 4, 5}, tough = {0, 0, 0} },
@@ -4252,7 +4253,7 @@ end)()
                 speed = START_SPEED,
                 bricks = {}, alive = 0,
                 dir = 0, dragging = false,
-                diff = DIFFS[2], stage = 1,
+                diff = DIFFS[2], diffIdx = 2, stage = 1,
             }
             local menu -- قائمة اختيار الصعوبة (تنبني تحت)
 
@@ -4325,17 +4326,18 @@ end)()
                 S.bx, S.by = S.px, PADDLE_Y - BALL_R
             end
 
-            local function newGame(diff)
-                S.diff = diff
+            local function newGame(idx, stage)
+                local diff = DIFFS[idx]
+                S.diff, S.diffIdx = diff, idx
                 PADDLE_W, START_SPEED, MAX_SPEED = diff.paddle, diff.speed, diff.maxSpeed
-                S.score, S.lives, S.stage = 0, diff.lives, 1
-                S.speed = START_SPEED
+                S.score, S.lives, S.stage = 0, diff.lives, stage or 1
+                S.speed = math.min(START_SPEED + (S.stage - 1) * 25, MAX_SPEED)
                 S.px = W / 2
                 buildBricks()
                 resetBall()
                 updateStatus()
                 if menu then menu.Visible = false end
-                showMsg("المرحلة 1 من " .. STAGES .. " • " .. diff.name .. "\nالمس الشاشة لإطلاق الكرة\nحرّك إصبعك لتحريك المضرب")
+                showMsg("المرحلة " .. S.stage .. " من " .. STAGES .. " • " .. diff.name .. "\nالمس الشاشة لإطلاق الكرة\nحرّك إصبعك لتحريك المضرب")
             end
 
             local function launch()
@@ -4366,6 +4368,7 @@ end)()
             end
 
             local function nextLevel()
+                unlocked[S.diffIdx] = math.min(math.max(unlocked[S.diffIdx], S.stage + 1), STAGES)
                 if S.stage >= STAGES then
                     -- خلّصت المراحل الثلاث
                     S.state = "won"
@@ -4383,7 +4386,7 @@ end)()
                 showMsg("🎉 المرحلة " .. S.stage .. " من " .. STAGES .. "\nالمس الشاشة للإطلاق")
             end
 
-            -- قائمة اختيار الصعوبة
+            -- قائمة اختيار الصعوبة ثم المرحلة
             menu = Instance.new("Frame")
             menu.Name = "DifficultyMenu"
             menu.BackgroundColor3 = Color3.fromRGB(16, 16, 22)
@@ -4398,37 +4401,105 @@ end)()
             local menuTitle = Instance.new("TextLabel")
             menuTitle.BackgroundTransparency = 1
             menuTitle.AnchorPoint = Vector2.new(0.5, 0)
-            menuTitle.Position = UDim2.fromScale(0.5, 0.06)
-            menuTitle.Size = UDim2.fromScale(0.8, 0.16)
+            menuTitle.Position = UDim2.new(0.5, 0, 0.08, 0)
+            menuTitle.Size = UDim2.new(0.9, 0, 0, 26)
             menuTitle.Font = Enum.Font.GothamBold
-            menuTitle.TextScaled = true
+            menuTitle.TextSize = 16
             menuTitle.TextColor3 = Color3.new(1, 1, 1)
-            menuTitle.Text = "اختر الصعوبة • كل صعوبة 3 مراحل"
             menuTitle.ZIndex = 12013
             menuTitle.Parent = menu
 
-            for i, d in ipairs(DIFFS) do
+            local function makeRow()
+                local row = Instance.new("Frame")
+                row.BackgroundTransparency = 1
+                row.AnchorPoint = Vector2.new(0.5, 0.5)
+                row.Position = UDim2.fromScale(0.5, 0.55)
+                row.Size = UDim2.new(1, -20, 0, 60)
+                row.ZIndex = 12013
+                row.Visible = false
+                row.Parent = menu
+                local lay = Instance.new("UIListLayout", row)
+                lay.FillDirection = Enum.FillDirection.Horizontal
+                lay.HorizontalAlignment = Enum.HorizontalAlignment.Center
+                lay.VerticalAlignment = Enum.VerticalAlignment.Center
+                lay.SortOrder = Enum.SortOrder.LayoutOrder
+                lay.Padding = UDim.new(0, 8)
+                return row
+            end
+            local function makeBtn(parent, text, color, order)
                 local b = Instance.new("TextButton")
-                b.Position = UDim2.fromScale(0.02 + (#DIFFS - i) * 0.245, 0.3)
-                b.Size = UDim2.fromScale(0.225, 0.58)
-                b.BackgroundColor3 = d.color
+                b.Size = UDim2.new(0, 96, 0, 54)
+                b.LayoutOrder = order
+                b.BackgroundColor3 = color
                 b.BorderSizePixel = 0
                 b.AutoButtonColor = true
                 b.Font = Enum.Font.GothamBold
-                b.TextScaled = true
+                b.TextSize = 14
                 b.TextWrapped = true
                 b.TextColor3 = Color3.new(1, 1, 1)
-                b.Text = d.name .. "\n" .. STAGES .. " مراحل\n❤ " .. d.lives
+                b.Text = text
                 b.ZIndex = 12014
-                b.Parent = menu
-                Instance.new("UICorner", b).CornerRadius = UDim.new(0, 10)
-                local bp = Instance.new("UIPadding", b)
-                bp.PaddingLeft, bp.PaddingRight = UDim.new(0, 8), UDim.new(0, 8)
-                bp.PaddingTop, bp.PaddingBottom = UDim.new(0, 8), UDim.new(0, 8)
+                b.Parent = parent
+                Instance.new("UICorner", b).CornerRadius = UDim.new(0, 8)
+                return b
+            end
+
+            local diffRow, stageRow = makeRow(), makeRow()
+
+            local backBtn = Instance.new("TextButton")
+            backBtn.AnchorPoint = Vector2.new(0.5, 0)
+            backBtn.Position = UDim2.new(0.5, 0, 0.55, 48)
+            backBtn.Size = UDim2.new(0, 90, 0, 28)
+            backBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 62)
+            backBtn.BorderSizePixel = 0
+            backBtn.Font = Enum.Font.GothamBold
+            backBtn.TextSize = 13
+            backBtn.TextColor3 = Color3.new(1, 1, 1)
+            backBtn.Text = "↩ رجوع"
+            backBtn.ZIndex = 12014
+            backBtn.Visible = false
+            backBtn.Parent = menu
+            Instance.new("UICorner", backBtn).CornerRadius = UDim.new(0, 7)
+
+            local function showDifficulties()
+                menuTitle.Text = "اختر الصعوبة"
+                diffRow.Visible = true
+                stageRow.Visible = false
+                backBtn.Visible = false
+            end
+
+            local function showStages(idx)
+                local d = DIFFS[idx]
+                for _, c in ipairs(stageRow:GetChildren()) do
+                    if c:IsA("TextButton") then c:Destroy() end
+                end
+                menuTitle.Text = d.name .. " • اختر المرحلة"
+                for st = 1, STAGES do
+                    local open = st <= unlocked[idx]
+                    local b = makeBtn(stageRow,
+                        open and ("المرحلة " .. st) or ("🔒 المرحلة " .. st),
+                        open and d.color or Color3.fromRGB(55, 55, 65), STAGES - st)
+                    if open then
+                        add(b.MouseButton1Click:Connect(function()
+                            if S.state == "menu" then newGame(idx, st) end
+                        end))
+                    else
+                        b.AutoButtonColor = false
+                        b.TextColor3 = Color3.fromRGB(150, 150, 160)
+                    end
+                end
+                diffRow.Visible = false
+                stageRow.Visible = true
+                backBtn.Visible = true
+            end
+
+            for i, d in ipairs(DIFFS) do
+                local b = makeBtn(diffRow, d.name .. "\n❤ " .. d.lives, d.color, #DIFFS - i)
                 add(b.MouseButton1Click:Connect(function()
-                    if S.state == "menu" then newGame(d) end
+                    if S.state == "menu" then showStages(i) end
                 end))
             end
+            add(backBtn.MouseButton1Click:Connect(showDifficulties))
 
             local function showMenu()
                 clearBricks()
@@ -4436,6 +4507,7 @@ end)()
                 S.vx, S.vy = 0, 0
                 msg.Visible = false
                 menu.Visible = true
+                showDifficulties()
             end
 
             -- يرجع الطوبة اللي تتقاطع مع الكرة عند الموضع (x, y)
@@ -19050,7 +19122,7 @@ end)
 - 🏰 دفاع البيت: حملة عوالم ومراحل، كل مرحلة فيها 3 بوسات. الكائنات تشتريها من المتجر مرة وحدة وتنحفظ، والفلوس تجي من مكافآت البوسات. فيه لوحة متصدرين.
 - 🧩 لعبة الأرقام: 3 مستويات (سهل 3×2، صعب 3×3، مستحيل 4×4)، فيها مساعد تلقائي وحد للحركات.
 - 🃏 تطابق البطاقات: اكشف بطاقتين متشابهتين من بين 18 بطاقة.
-- 🧱 تكسير الطوب: كرة ومضرب، 4 صعوبات (سهل، متوسط، صعب، مستحيل) وكل صعوبة 3 مراحل، وكل مرحلة أسرع وفيها صفوف أكثر، والطوب ذو الإطار الأبيض يحتاج ضربتين. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
+- 🧱 تكسير الطوب: كرة ومضرب، 4 صعوبات (سهل، متوسط، صعب، مستحيل) وكل صعوبة 3 مراحل، المرحلة الأولى مفتوحة والباقي ينفتح بعد ما تخلص اللي قبله، والطوب ذو الإطار الأبيض يحتاج ضربتين. الملعب عريض، وتحرك المضرب بسحب الإصبع من أي مكان بالشاشة أو A / D أو الأسهم، وتلمس الشاشة (أو مسافة) لإطلاق الكرة.
 - 🧮 تحدي الرياضيات: لعبة أسئلة حساب.
 أسئلة الألعاب: لو سأل عن لعبة بشكل عام (وش هي، كيف ألعبها) جاوب في 3 أو 4 أسطر بس: الفكرة والهدف وأهم زر. ولو سأل عن تفصيلة (مثل كيف أفتح الدولاب أو وين البطاريات) جاوب عن التفصيلة بس.
 
