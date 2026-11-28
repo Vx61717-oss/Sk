@@ -4041,13 +4041,13 @@ end)()
         Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0, 8)
 
         -- ===== إعدادات اللعبة (إحداثيات منطقية ثابتة، والعرض يتمدد حسب الشاشة) =====
-        local W, H = 720, 420          -- حجم الملعب المنطقي (عرضي يملأ شاشة الجوال)
+        local W, H = 720, 480          -- حجم الملعب المنطقي (عرضي يملأ شاشة الجوال)
         local WALL = 12                -- سماكة الجدران الزرقاء
         local COLS = 14                -- أعمدة الطوب
         local BRICK_TOP = 58           -- بداية الصف الأول
         local BRICK_H = 18             -- ارتفاع الصف
         local BRICK_GAP = 3            -- فراغ بين الطوب
-        local PADDLE_Y = 380
+        local PADDLE_Y = 440
         local PADDLE_H = 12
         local PADDLE_W = 104
         local BALL_R = 6
@@ -4094,7 +4094,7 @@ end)()
         }
         -- ===== مراحل الأحجار (من المتوسط للمستحيل) =====
         -- # = حجر رمادي ما ينكسر • . = فاضي • 1-8 = طوب عادي (لون) • a-h = طوب قوي (ضربتين)
-        local LAYOUT_TOP, LAYOUT_CH, LAYOUT_GAP = 40, 12, 2
+        local LAYOUT_TOP, LAYOUT_CH, LAYOUT_GAP = 28, 12, 2
         local LAYOUTS = {
             [2] = { -- متوسط
                 { -- المرحلة 1
